@@ -149,6 +149,9 @@ CREATE TABLE status_transferencia(
 
 INSERT INTO status_transferencia (codigo) VALUES
 ('CRIADA'),
+('PENDENTE_APROVACAO'),
+('APROVADA'),
+('RECUSADA'),
 ('PROCESSANDO'),
 ('CONCLUIDA'),
 ('FALHOU');
@@ -163,6 +166,8 @@ CREATE TABLE transferencia(
     aluno_solicitante_cliente_id    BIGINT NOT NULL,
     valor_centavos                  BIGINT NOT NULL,
     tarifa_centavos                 BIGINT NOT NULL DEFAULT 0,
+    tipo                            VARCHAR(10) NOT NULL,
+    descricao                       VARCHAR(255) NULL,
     status_id                       INTEGER NOT NULL,
     chave_idempotencia              VARCHAR(255) NOT NULL,
     criado_em                       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -184,6 +189,9 @@ CREATE TABLE transferencia(
     ),
     CONSTRAINT verifica_transferencia_valor CHECK (valor_centavos > 0),
     CONSTRAINT verifica_transferencia_tarifa CHECK (tarifa_centavos >= 0),
+    CONSTRAINT verifica_transferencia_tipo CHECK (
+        tipo IN ('PIX', 'TED')
+    ),
     CONSTRAINT verifica_transferencia_conclusao CHECK (
         concluido_em IS NULL OR concluido_em >= criado_em
     )
@@ -223,11 +231,15 @@ CREATE TABLE evento_status_transferencia(
     id                              BIGSERIAL PRIMARY KEY,
     transferencia_id               BIGINT NOT NULL,
     status_id                       INTEGER NOT NULL,
+    aluno_responsavel_cliente_id    BIGINT NULL,
     ocorrido_em                     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT fk_evento_transferencia FOREIGN KEY (transferencia_id)
         REFERENCES transferencia(id) ON DELETE RESTRICT,
     CONSTRAINT fk_evento_status FOREIGN KEY (status_id)
-        REFERENCES status_transferencia(id) ON DELETE RESTRICT
+        REFERENCES status_transferencia(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_evento_aluno_responsavel
+        FOREIGN KEY (aluno_responsavel_cliente_id)
+        REFERENCES aluno(cliente_id) ON DELETE RESTRICT
 );
 
 CREATE INDEX indice_evento_status_transferencia
