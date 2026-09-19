@@ -91,7 +91,7 @@ CREATE TABLE organizacao_estudantil(
     CONSTRAINT fk_organizacao_universidade FOREIGN KEY (universidade_id)
         REFERENCES universidade(id) ON DELETE RESTRICT,
     CONSTRAINT unico_organizacao_cnpj UNIQUE (cnpj),
-    CONSTRAINT verifica_organizacao_cnpj CHECK (cnpj ~ '^[0-9]{14}$')
+    CONSTRAINT verifica_organizacao_cnpj CHECK (cnpj ~ '^[A-Z0-9]{12}[0-9]{2}$')
 );
 
 CREATE TABLE vinculo_organizacao(
