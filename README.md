@@ -1,5 +1,8 @@
 # Bootcamp QI Tech — projeto base da API
 
+Incremento do banco universitário: [entrega da aula 2 e guia de execução](docs/entrega-aula2.md)
+e [RFC para revisão do grupo](docs/rfc-banco-universitario.md).
+
 Projeto base do Bootcamp: uma API REST em **Python + FastAPI**, com banco
 **PostgreSQL**, rodando em **Docker**.
 
