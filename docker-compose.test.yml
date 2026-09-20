@@ -1,0 +1,45 @@
+services:
+  db:
+    build: ./database
+    environment:
+      POSTGRES_USER: bootcamp
+      POSTGRES_PASSWORD: bootcamp
+      POSTGRES_DB: bootcamp_test
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bootcamp -d bootcamp_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  api:
+    build:
+      context: .
+      target: api
+    environment:
+      APP_ENV: test
+      DATABASE_URL: postgresql+psycopg2://bootcamp:bootcamp@db:5432/bootcamp_test
+      INTERNAL_TOKEN: test-only-token
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:3000/health_check')"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  tests:
+    build:
+      context: .
+      target: test
+    environment:
+      APP_ENV: test
+      DATABASE_URL: postgresql+psycopg2://bootcamp:bootcamp@db:5432/bootcamp_test
+      INTERNAL_TOKEN: test-only-token
+      SERVER_LOCALHOST: api
+      API_PORT: "3000"
+    depends_on:
+      api:
+        condition: service_healthy

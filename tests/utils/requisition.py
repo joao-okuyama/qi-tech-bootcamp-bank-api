@@ -26,7 +26,7 @@ class ClientRequisition:
         if headers is None:
             headers = dict()
 
-        api_host = environ.get("SERVER_LOCALHOST", "0.0.0.0")
+        api_host = environ.get("SERVER_LOCALHOST", "127.0.0.1")
         api_port = environ.get("API_PORT", "3000")
         base_url = f"http://{api_host}:{api_port}"
 
@@ -42,6 +42,7 @@ class ClientRequisition:
                 cert=cert,
                 verify=verify,
                 params=query_params,
+                timeout=15,
             )
         except RequestsConnectionError:
             raise RuntimeError(API_OFFLINE.format(base_url=base_url)) from None

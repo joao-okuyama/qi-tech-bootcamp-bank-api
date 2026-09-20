@@ -16,6 +16,15 @@ RUN pip install --upgrade pip && pip install -r /requirements.txt
 WORKDIR /app
 COPY src /app
 
+FROM base AS test
+COPY requirements-dev.txt /requirements-dev.txt
+RUN pip install -r /requirements-dev.txt
+WORKDIR /project
+COPY . /project
+RUN chown -R user /project
+USER user
+CMD ["python", "-m", "pytest", "tests", "-q"]
+
 FROM base AS api
 RUN chown -R user /app
 USER user
@@ -23,4 +32,3 @@ USER user
 # --no-server-header: o uvicorn nao anuncia a propria versao, que e
 # informacao de menos pra quem procura uma versao com falha conhecida.
 CMD uvicorn app:app --host 0.0.0.0 --port 3000 --no-server-header
-
