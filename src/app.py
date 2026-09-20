@@ -10,6 +10,9 @@ from middlewares import (
     register_session_manager_middleware,
 )
 from resources import HealthCheckResource, SampleEntityResource
+from resources.account import AccountResource
+from resources.customer import CustomerResource
+from resources.university import UniversityResource
 from utils.logger import setup_logging
 
 
@@ -156,6 +159,38 @@ def create_app() -> FastAPI:
         "/sample_entities",
         sample_entity_resource.on_get_list,
         methods=["GET"],
+    )
+
+    university_resource = UniversityResource()
+    customer_resource = CustomerResource()
+    account_resource = AccountResource()
+
+    application.add_api_route(
+        "/university", university_resource.on_post, methods=["POST"],
+    )
+    application.add_api_route(
+        "/university/{university_key}", university_resource.on_get_by_key, methods=["GET"],
+    )
+    application.add_api_route(
+        "/student", customer_resource.on_post_student, methods=["POST"],
+    )
+    application.add_api_route(
+        "/student_organization", customer_resource.on_post_organization, methods=["POST"],
+    )
+    application.add_api_route(
+        "/customer/{customer_key}", customer_resource.on_get_by_key, methods=["GET"],
+    )
+    application.add_api_route(
+        "/customer/{customer_key}/account", account_resource.on_post, methods=["POST"],
+    )
+    application.add_api_route(
+        "/account/{account_key}", account_resource.on_get_by_key, methods=["GET"],
+    )
+    application.add_api_route(
+        "/account/{account_key}/balance", account_resource.on_get_balance, methods=["GET"],
+    )
+    application.add_api_route(
+        "/account/{account_key}/statement", account_resource.on_get_statement, methods=["GET"],
     )
 
     register_error_handlers(application)
