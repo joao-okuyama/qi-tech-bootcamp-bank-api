@@ -9,3 +9,8 @@ from models.conta import Conta
 from models.status_transferencia import StatusTransferencia
 from models.transferencia import Transferencia
 from models.movimentacao_conta import MovimentacaoConta
+from models.credencial_aluno import CredencialAluno
+from models.vinculo_organizacao import VinculoOrganizacao
+from models.designacao_aprovador import DesignacaoAprovador
+from models.deposito import Deposito
+from models.evento_status_transferencia import EventoStatusTransferencia

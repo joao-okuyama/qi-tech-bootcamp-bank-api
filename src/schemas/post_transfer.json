@@ -1,0 +1,47 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+        "source_account_key": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+        },
+        "destination_account_key": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+        },
+        "amount_cents": {
+            "type": "integer",
+            "minimum": 1
+        },
+        "type": {
+            "enum": [
+                "PIX",
+                "TED"
+            ]
+        },
+        "description": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "minLength": 1,
+            "maxLength": 255,
+            "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+        },
+        "idempotency_key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255,
+            "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+        }
+    },
+    "required": [
+        "source_account_key",
+        "destination_account_key",
+        "amount_cents",
+        "type",
+        "idempotency_key"
+    ],
+    "additionalProperties": false
+}

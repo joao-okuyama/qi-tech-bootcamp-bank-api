@@ -1,5 +1,6 @@
 from datetime import date
 
+from controllers.access_policy import AccessPolicy
 from controllers.base_controller import BaseController
 from dtos import SampleEntityDTO
 from errors import (
@@ -12,7 +13,6 @@ from errors import (
     SampleEntityFinalStatus,
     UnderageSampleEntity,
 )
-from models import SampleEntity, SampleEntityStatus
 from repositories import SampleEntityRepository
 from utils.document_number import is_valid_cpf
 
@@ -21,6 +21,8 @@ from utils.document_number import is_valid_cpf
 # e o create lá embaixo mostra a diferença em duas linhas.
 MINIMUM_AGE = 18
 MAXIMUM_AGE = 80
+STATUS_PENDING = "pending"
+STATUS_FAILED = "failed"
 
 
 class SampleEntityController(BaseController):
@@ -28,6 +30,7 @@ class SampleEntityController(BaseController):
 
     def __init__(self) -> None:
         super().__init__(__name__)
+        self.access = AccessPolicy(self.context)
         self.sample_entity_repository = SampleEntityRepository(self.context)
 
     def create(self, sample_entity_data: dict) -> dict:
@@ -40,6 +43,7 @@ class SampleEntityController(BaseController):
         mundo: se o número existe, se alguém já usou, que idade a pessoa
         tem hoje.
         """
+        self.access.require_internal()
         self.logger.debug("Criando uma nova Sample Entity")
 
         document_number = sample_entity_data["document_number"]
@@ -67,9 +71,9 @@ class SampleEntityController(BaseController):
         # outro desfecho — e as duas regras moram lado a lado de
         # propósito, pra que a diferença fique à vista.
         if age > MAXIMUM_AGE:
-            new_status = SampleEntityStatus.FAILED
+            new_status = STATUS_FAILED
         else:
-            new_status = SampleEntityStatus.PENDING
+            new_status = STATUS_PENDING
 
         self.sample_entity_repository.update_status(sample_entity, new_status)
 
@@ -79,6 +83,7 @@ class SampleEntityController(BaseController):
         return sample_entity_dto
 
     def get_by_key(self, sample_entity_key: str) -> dict:
+        self.access.require_internal()
         self.logger.debug(f"Buscando a entidade de chave {sample_entity_key}")
 
         sample_entity = self.sample_entity_repository.get_by_key(sample_entity_key)
@@ -106,6 +111,7 @@ class SampleEntityController(BaseController):
         src/schemas/get_sample_entities.json. O que sobrou e o que
         nenhum schema sabe fazer: comparar dois campos ENTRE SI.
         """
+        self.access.require_internal()
         birthdate_from = filters.get("birthdate_from")
         birthdate_to = filters.get("birthdate_to")
 
@@ -138,6 +144,7 @@ class SampleEntityController(BaseController):
         }
 
     def update_status(self, sample_entity_key: str, new_status: str) -> dict:
+        self.access.require_internal()
         sample_entity = self.sample_entity_repository.get_by_key(sample_entity_key)
 
         if sample_entity is None:
@@ -153,6 +160,7 @@ class SampleEntityController(BaseController):
         return sample_entity_dto
 
     def webhook_increment_counter(self, sample_entity_key: str) -> None:
+        self.access.require_internal()
         self.logger.debug(f"Processando webhook da entidade {sample_entity_key}")
 
         sample_entity = self.sample_entity_repository.get_by_key(sample_entity_key)
@@ -164,10 +172,10 @@ class SampleEntityController(BaseController):
 
         self.session.commit()
 
-    def _check_status_can_change(self, sample_entity: SampleEntity, new_status: str) -> None:
+    def _check_status_can_change(self, sample_entity, new_status: str) -> None:
         old_status = sample_entity.status.enumerator
 
-        if old_status != SampleEntityStatus.PENDING:
+        if old_status != STATUS_PENDING:
             raise SampleEntityFinalStatus(old_status, new_status)
 
     def _parse_birthdate(self, raw_birthdate: str) -> date:

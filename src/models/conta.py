@@ -9,7 +9,8 @@ class Conta(Base):
 
     id = Column(BigInteger, primary_key=True)
     chave = Column(UUID(as_uuid=True), nullable=False, server_default=func.gen_random_uuid())
-    cliente_id = Column(BigInteger, ForeignKey("cliente.id"), nullable=False)
+    cliente_id = Column(BigInteger, ForeignKey("cliente.id"))
+    finalidade = Column(String(20), nullable=False, server_default="CLIENTE")
     saldo_centavos = Column(BigInteger, nullable=False, server_default="0")
     moeda = Column(CHAR(3), nullable=False, server_default="BRL")
     situacao = Column(String(20), nullable=False, server_default="ATIVA")

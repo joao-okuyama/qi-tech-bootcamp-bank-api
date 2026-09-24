@@ -184,6 +184,8 @@ def query_params_to_dict(query_params, schema: dict) -> dict:
         if declared.get("type") == "array":
             parsed_params[param_name] = query_params.getlist(param_name)
         else:
+            if len(query_params.getlist(param_name)) != 1:
+                raise InvalidSchema("A scalar query parameter must not be repeated.")
             parsed_params[param_name] = query_params[param_name]
 
     return parsed_params

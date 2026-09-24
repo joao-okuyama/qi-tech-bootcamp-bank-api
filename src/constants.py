@@ -51,3 +51,7 @@ def check_variables():
             "Rodando com 'docker compose up' elas já vêm preenchidas. "
             "Fora do Docker, copie o .env.example para .env."
         )
+    if not INTERNAL_TOKEN.strip():
+        raise EnvironmentError("INTERNAL_TOKEN não pode ser vazio ou conter apenas espaços.")
+    if APP_ENV.lower() not in ("local", "test") and INTERNAL_TOKEN == "default_token":
+        raise EnvironmentError("Configure um INTERNAL_TOKEN próprio fora dos ambientes local e test.")

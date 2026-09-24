@@ -101,7 +101,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from constants import DATABASE_URL
 
 
-engine = create_engine(DATABASE_URL, pool_size=5, pool_recycle=600, pool_pre_ping=True)
+engine = create_engine(DATABASE_URL, pool_size=5, pool_recycle=600, pool_pre_ping=True, hide_parameters=True)
 
 SessionLocal = sessionmaker(bind=engine, autoflush=False)
 
@@ -109,7 +109,7 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False)
 class Context:
     """O contexto de um trabalho: o que vale pra esta requisição, e só pra ela.
 
-    Hoje ele carrega uma coisa só — a sessão de banco. É o mesmo objeto
+    Hoje carrega a sessão de banco e a credencial desta requisição. É o mesmo objeto
     que existe nos serviços da QI (lá em `utils/context.py`), e lá ele
     carrega mais: o identificador da requisição, o corpo cru, o tempo.
     Neste projeto o identificador ainda viaja por conta própria, em
@@ -142,6 +142,8 @@ class Context:
 
     def __init__(self) -> None:
         self.db_session: Optional[Session] = None
+        self.credential_type: Optional[str] = None
+        self.credential_digest: Optional[str] = None
 
     def get_or_create_session(self) -> Session:
         if self.db_session is None:

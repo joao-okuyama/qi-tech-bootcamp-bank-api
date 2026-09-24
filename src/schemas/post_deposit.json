@@ -1,0 +1,21 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+        "amount_cents": {
+            "type": "integer",
+            "minimum": 1
+        },
+        "reference": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255,
+            "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+        }
+    },
+    "required": [
+        "amount_cents",
+        "reference"
+    ],
+    "additionalProperties": false
+}
