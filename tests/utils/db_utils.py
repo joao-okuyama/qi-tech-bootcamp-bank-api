@@ -2,6 +2,7 @@ from os import environ
 from pathlib import Path
 
 from sqlalchemy import create_engine
+from sqlalchemy.engine import make_url
 from sqlalchemy.exc import OperationalError
 
 
@@ -52,7 +53,14 @@ class DbUtils:
 
     @staticmethod
     def database_url() -> str:
-        return environ.get("DATABASE_URL", DEFAULT_DATABASE_URL)
+        url = environ.get("DATABASE_URL", DEFAULT_DATABASE_URL)
+        database = make_url(url).database or ""
+        if (environ.get("APP_ENV") != "test"
+                or environ.get("ALLOW_TEST_DATABASE_RESET") != "1"
+                or not database.endswith("_test")):
+            raise RuntimeError("A regressão exige APP_ENV=test, ALLOW_TEST_DATABASE_RESET=1 "
+                               "e um banco dedicado com nome terminado em _test.")
+        return url
 
     @staticmethod
     def rollback() -> None:
@@ -63,7 +71,7 @@ class DbUtils:
                 for query in RESET_QUERIES:
                     connection.exec_driver_sql(query)
 
-                connection.exec_driver_sql(SCHEMA_FILE.read_text())
+                connection.exec_driver_sql(SCHEMA_FILE.read_text(encoding="utf-8"))
         except OperationalError:
             message = DATABASE_OFFLINE.format(host=engine.url.host, port=engine.url.port)
             raise RuntimeError(message) from None

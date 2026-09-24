@@ -24,7 +24,7 @@ services:
     ports:
       # Se a porta 3000 ja estiver ocupada na sua maquina, coloque
       # API_PORT=3001 (ou outra livre) no seu .env.
-      - "${API_PORT:-3000}:3000"
+      - "127.0.0.1:${API_PORT:-3000}:3000"
     environment:
       # Dentro do compose, o banco atende pelo nome "db" — nao por localhost.
       # Por isso esta linha nao tem padrao pra sobrescrever: aqui dentro o
@@ -47,7 +47,7 @@ services:
       # a API recarrega sozinha (o --reload ali embaixo).
       - ./src:/app
     # --reload: salvou o arquivo, a API reinicia sozinha.
-    command: uvicorn app:app --host 0.0.0.0 --port 3000 --no-server-header --reload
+    command: uvicorn app:app --host 0.0.0.0 --port 3000 --no-server-header --no-access-log --reload
     healthcheck:
       # "Subiu" nao e a mesma coisa que "ja responde". E esta checagem
       # que diz quando a API passa a atender de verdade — espere ela
@@ -68,9 +68,11 @@ services:
       POSTGRES_USER: bootcamp
       POSTGRES_PASSWORD: bootcamp
       POSTGRES_DB: bootcamp
+    volumes:
+      - dados_banco:/var/lib/postgresql/data
     ports:
       # Mesma ideia: DB_PORT=5433 no .env se a 5432 estiver ocupada.
-      - "${DB_PORT:-5432}:5432"
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
     healthcheck:
       # A API so sobe depois que o banco responder de verdade.
       test: ["CMD-SHELL", "pg_isready -U bootcamp -d bootcamp"]
@@ -78,3 +80,5 @@ services:
       timeout: 3s
       retries: 20
 
+volumes:
+  dados_banco:

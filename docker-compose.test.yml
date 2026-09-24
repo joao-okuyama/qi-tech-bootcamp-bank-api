@@ -33,13 +33,11 @@ services:
   tests:
     build:
       context: .
-      target: test
+      target: acceptance
     environment:
       APP_ENV: test
-      DATABASE_URL: postgresql+psycopg2://bootcamp:bootcamp@db:5432/bootcamp_test
       INTERNAL_TOKEN: test-only-token
-      SERVER_LOCALHOST: api
-      API_PORT: "3000"
+      API_BASE_URL: http://api:3000
     depends_on:
       api:
         condition: service_healthy
