@@ -84,6 +84,7 @@ CREATE TABLE organizacao_estudantil(
     universidade_id                 BIGINT NOT NULL,
     razao_social                    VARCHAR(255) NOT NULL,
     nome_fantasia                   VARCHAR(255) NOT NULL,
+    email                           VARCHAR(255) NOT NULL,
     cnpj                            CHAR(14) NOT NULL,
     criado_em                       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT fk_organizacao_cliente FOREIGN KEY (cliente_id)
