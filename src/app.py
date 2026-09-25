@@ -9,9 +9,11 @@ from middlewares import (
     register_request_logger_middleware,
     register_session_manager_middleware,
 )
-from resources import HealthCheckResource, SampleEntityResource
+from resources import HealthCheckResource
+from resources.access import AccessResource
 from resources.account import AccountResource
 from resources.customer import CustomerResource
+from resources.payment import PaymentResource
 from resources.university import UniversityResource
 from utils.logger import setup_logging
 
@@ -58,7 +60,7 @@ def create_app() -> FastAPI:
     #           ↓
     #     request_logger    escreve "ENTROU" e, na volta, "SAIU"
     #           ↓
-    #     internal_token    confere o INTERNAL-TOKEN. Sem ele, para aqui
+    #     internal_token    identifica a credencial administrativa ou do aluno
     #           ↓
     #     session_manager   cuida da sessão de banco: desfaz se deu
     #           ↓           errado, fecha sempre — e nunca salva
@@ -71,7 +73,7 @@ def create_app() -> FastAPI:
     # • O identificador vem ANTES do log: se viesse depois, as linhas de
     #   log da requisição sairiam sem o nome dela, e o middleware
     #   existiria para nada.
-    # • O log vem ANTES do token: assim a tentativa recusada com 403
+    # • O log vem ANTES da credencial: assim a tentativa recusada com 403
     #   também aparece no log — e essa é justamente a que você quer ver,
     #   porque mil delas seguidas é alguém tentando adivinhar o token.
     # • A sessão de banco fica por DENTRO do token, encostada nas
@@ -126,39 +128,12 @@ def create_app() -> FastAPI:
     # se a coisa foi criada, agendada ou concluída. Esta lista diz QUEM
     # atende cada endereço, e mais nada.
     health_check_resource = HealthCheckResource()
-    sample_entity_resource = SampleEntityResource()
 
     application.add_api_route("/", health_check_resource.on_get_home, methods=["GET"])
     application.add_api_route(
         "/health_check",
         health_check_resource.on_get_health_check,
         methods=["GET"]
-    )
-
-    application.add_api_route(
-        "/sample_entity",
-        sample_entity_resource.on_post,
-        methods=["POST"],
-    )
-    application.add_api_route(
-        "/sample_entity/{sample_entity_key}",
-        sample_entity_resource.on_get_by_key,
-        methods=["GET"],
-    )
-    application.add_api_route(
-        "/sample_entity/{sample_entity_key}",
-        sample_entity_resource.on_put_by_key,
-        methods=["PUT"],
-    )
-    application.add_api_route(
-        "/webhook/sample_entity/{sample_entity_key}/increment_counter",
-        sample_entity_resource.on_put_increment_counter,
-        methods=["PUT"],
-    )
-    application.add_api_route(
-        "/sample_entities",
-        sample_entity_resource.on_get_list,
-        methods=["GET"],
     )
 
     university_resource = UniversityResource()
@@ -192,6 +167,17 @@ def create_app() -> FastAPI:
     application.add_api_route(
         "/account/{account_key}/statement", account_resource.on_get_statement, methods=["GET"],
     )
+
+    access_resource = AccessResource()
+    payment_resource = PaymentResource()
+    application.add_api_route("/customer/{customer_key}/credential", access_resource.on_credential, methods=["POST"])
+    application.add_api_route("/customer/{customer_key}/banking_access", access_resource.on_configure, methods=["PUT"])
+    application.add_api_route("/account/{account_key}/deposit", payment_resource.on_deposit, methods=["POST"])
+    application.add_api_route("/transfer", payment_resource.on_post, methods=["POST"])
+    application.add_api_route("/transfer/{transfer_key}", payment_resource.on_get, methods=["GET"])
+    application.add_api_route("/transfer/{transfer_key}/approve", payment_resource.on_approve, methods=["POST"])
+    application.add_api_route("/transfer/{transfer_key}/reject", payment_resource.on_reject, methods=["POST"])
+    application.add_api_route("/transfer/{transfer_key}/execute", payment_resource.on_execute, methods=["POST"])
 
     register_error_handlers(application)
 

@@ -1,6 +1,3 @@
-from models.sample_entity_status import SampleEntityStatus
-from models.sample_entity import SampleEntity
-from models.sample_entity_status_event import SampleEntityStatusEvent
 from models.universidade import Universidade
 from models.cliente import Cliente
 from models.aluno import Aluno
@@ -9,3 +6,8 @@ from models.conta import Conta
 from models.status_transferencia import StatusTransferencia
 from models.transferencia import Transferencia
 from models.movimentacao_conta import MovimentacaoConta
+from models.credencial_aluno import CredencialAluno
+from models.vinculo_organizacao import VinculoOrganizacao
+from models.designacao_aprovador import DesignacaoAprovador
+from models.deposito import Deposito
+from models.evento_status_transferencia import EventoStatusTransferencia

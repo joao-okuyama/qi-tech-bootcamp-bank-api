@@ -23,6 +23,12 @@ class AccountResource:
     def on_get_statement(self, account_key: str, request: Request) -> JSONResponse:
         limit = int(request.query_params.get("limit", 20))
         page = int(request.query_params.get("page", 0))
-        result = AccountController().get_statement(account_key, limit, page * limit)
-        result.update({"limit": limit, "page": page})
+        cursor = request.query_params.get("cursor")
+        controller = AccountController()
+        if cursor:
+            result = controller.get_statement_cursor(account_key, limit, cursor)
+            result.update({"limit": limit, "cursor": cursor})
+        else:
+            result = controller.get_statement(account_key, limit, page * limit)
+            result.update({"limit": limit, "page": page})
         return JSONResponse(content=result, status_code=200)

@@ -81,16 +81,16 @@ class SchemaHandler:
 
         Usa-se assim, no método do resource que recebe corpo:
 
-            class SampleEntityResource:
-                @SchemaHandler.validate("post_sample_entity.json")
-                def on_post(self, payload: dict) -> dict:
+            class CustomerResource:
+                @SchemaHandler.validate("post_student.json")
+                def on_post_student(self, payload: dict) -> JSONResponse:
 
         O nome do arquivo é o único argumento, e ele aponta pra dentro
         de src/schemas/. Método que não recebe corpo — um GET, um
         DELETE — não leva decorator nenhum: não há o que conferir.
 
         Repare que o endereço HTTP não aparece aqui. Quem liga
-        "/sample_entity" a este método é o src/app.py, e é de propósito:
+        "/student" a este método é o src/app.py, e é de propósito:
         o resource cuida do CONTEÚDO da requisição, o app.py cuida do
         ENDEREÇO dela.
         """
@@ -124,9 +124,9 @@ class SchemaHandler:
 
         Usa-se assim, num metodo que recebe a requisicao inteira:
 
-            class SampleEntityResource:
-                @SchemaHandler.validate_query_params("get_sample_entities.json")
-                def on_get_list(self, request: Request) -> JSONResponse:
+            class AccountResource:
+                @SchemaHandler.validate_query_params("get_account_statement.json")
+                def on_get_statement(self, account_key: str, request: Request) -> JSONResponse:
 
         Por que ler do `request` em vez dos argumentos da funcao: o
         FastAPI so entrega o que ele mesmo declarou. Um parametro com o
@@ -184,6 +184,8 @@ def query_params_to_dict(query_params, schema: dict) -> dict:
         if declared.get("type") == "array":
             parsed_params[param_name] = query_params.getlist(param_name)
         else:
+            if len(query_params.getlist(param_name)) != 1:
+                raise InvalidSchema("A scalar query parameter must not be repeated.")
             parsed_params[param_name] = query_params[param_name]
 
     return parsed_params

@@ -18,5 +18,6 @@ def session(monkeypatch):
     monkeypatch.setattr(database, "SessionLocal", MagicMock(return_value=session))
     context = database.open_context()
     context.db_session = session
+    context.credential_type = "INTERNAL"
     yield session
     database.clear_context()

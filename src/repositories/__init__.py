@@ -1,1 +1,1 @@
-from repositories.sample_entity_repository import SampleEntityRepository
+# Repositories package

@@ -1,0 +1,9 @@
+services:
+  tests:
+    build:
+      target: test
+    environment:
+      DATABASE_URL: postgresql+psycopg2://bootcamp:bootcamp@db:5432/bootcamp_test
+      SERVER_LOCALHOST: api
+      API_PORT: "3000"
+      ALLOW_TEST_DATABASE_RESET: "1"

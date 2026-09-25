@@ -13,8 +13,8 @@ class CustomerRepository:
         self.session.add(Aluno(
             cliente_id=customer.id,
             universidade_id=university_id,
-            nome_completo=data["full_name"].strip(),
-            email=data["email"].strip().lower(),
+            nome_completo=data["full_name"],
+            email=data["email"],
             cpf=data["cpf"],
             data_nascimento=birthdate,
         ))
@@ -28,8 +28,9 @@ class CustomerRepository:
         self.session.add(OrganizacaoEstudantil(
             cliente_id=customer.id,
             universidade_id=university_id,
-            razao_social=data["legal_name"].strip(),
-            nome_fantasia=data["trade_name"].strip(),
+            razao_social=data["legal_name"],
+            nome_fantasia=data["trade_name"],
+            email=data["email"],
             cnpj=data["cnpj"],
         ))
         self.session.flush()

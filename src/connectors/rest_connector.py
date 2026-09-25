@@ -13,7 +13,7 @@ class RestConnector(metaclass=ABCMeta):
     Este arquivo é pra chamada HTTP o que o database.py é pro banco: o
     ÚNICO lugar que sabe COMO se fala com um serviço de fora. Quem
     precisa de outro serviço não escreve requests.get() no meio do
-    código — cria um connector (veja o bankslip_connector.py) e chama
+    código — cria um connector herdando de RestConnector e chama
     um método com nome de gente.
 
     O que mora aqui, e por quê:

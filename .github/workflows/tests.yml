@@ -1,0 +1,31 @@
+name: Testes Linux
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Aceitação HTTP com PostgreSQL novo
+        run: docker compose -p banco-acceptance -f docker-compose.test.yml up --build --abort-on-container-exit --exit-code-from tests
+      - name: Logs em caso de falha
+        if: failure()
+        run: docker compose -p banco-acceptance -f docker-compose.test.yml logs --no-color
+      - name: Encerrar ambiente isolado
+        if: always()
+        run: docker compose -p banco-acceptance -f docker-compose.test.yml down --volumes
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Regressão completa com PostgreSQL novo
+        run: docker compose -p banco-regression -f docker-compose.test.yml -f docker-compose.regression.yml up --build --abort-on-container-exit --exit-code-from tests
+      - name: Logs em caso de falha
+        if: failure()
+        run: docker compose -p banco-regression -f docker-compose.test.yml -f docker-compose.regression.yml logs --no-color
+      - name: Encerrar ambiente isolado
+        if: always()
+        run: docker compose -p banco-regression -f docker-compose.test.yml -f docker-compose.regression.yml down --volumes
