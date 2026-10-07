@@ -1,6 +1,6 @@
 from sqlalchemy import and_, or_
 
-from models import Aluno, Cliente, CredencialAluno, DesignacaoAprovador, VinculoOrganizacao
+from models import Aluno, Cliente, CredencialAluno, DesignacaoAprovador, StatusCliente, VinculoOrganizacao
 
 
 class AccessRepository:
@@ -10,7 +10,7 @@ class AccessRepository:
     def actor(self, digest):
         return (self.session.query(Cliente).join(Aluno, Aluno.cliente_id == Cliente.id)
                 .join(CredencialAluno, CredencialAluno.aluno_cliente_id == Cliente.id)
-                .filter(CredencialAluno.resumo_token == digest, Cliente.situacao == "ATIVO").first())
+                .filter(CredencialAluno.resumo_token == digest, Cliente.status.has(StatusCliente.codigo == "ATIVO")).first())
 
     def customer(self, key, lock=False):
         query = self.session.query(Cliente).filter(Cliente.chave == key)
@@ -18,7 +18,7 @@ class AccessRepository:
 
     def student(self, key):
         return (self.session.query(Cliente).join(Aluno, Aluno.cliente_id == Cliente.id)
-                .filter(Cliente.chave == key, Cliente.situacao == "ATIVO").first())
+                .filter(Cliente.chave == key, Cliente.status.has(StatusCliente.codigo == "ATIVO")).first())
 
     def set_credential(self, student_id, digest, now):
         row = self.session.get(CredencialAluno, student_id)
@@ -42,7 +42,7 @@ class AccessRepository:
         return (self.session.query(DesignacaoAprovador)
                 .join(Cliente, Cliente.id == DesignacaoAprovador.aluno_cliente_id)
                 .filter(DesignacaoAprovador.organizacao_cliente_id == organization_id,
-                        Cliente.situacao == "ATIVO", self.active(DesignacaoAprovador, now)).all())
+                        Cliente.status.has(StatusCliente.codigo == "ATIVO"), self.active(DesignacaoAprovador, now)).all())
 
     def replace_access(self, organization_id, members, approvers, now):
         for model in (VinculoOrganizacao, DesignacaoAprovador):

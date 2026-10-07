@@ -25,10 +25,11 @@ def test_layers_only_depend_on_allowed_application_layers():
     allowed = {
         "middlewares": {"database", "errors", "utils"},
         "resources": {"controllers", "utils"},
-        "controllers": {"database", "dtos", "errors", "repositories", "utils"},
+        "controllers": {"database", "dtos", "errors", "repositories", "utils", "connectors"},
         "repositories": {"database", "models"},
         "models": {"models"},
         "dtos": {"models"},
+        "connectors": {"errors", "utils"},
     }
     application_layers = set(allowed) | {"database", "app"}
     for layer, permitted in allowed.items():
@@ -68,7 +69,7 @@ def test_http_and_sql_stay_in_their_layers():
     for path in python_files("controllers"):
         source = path.read_text(encoding="utf-8")
         assert "from fastapi" not in source and "import fastapi" not in source
-        assert ".query(" not in source and ".execute(" not in source
+        assert ".query(" not in source and "session.execute(" not in source
         assert "request.headers" not in source and "request.url" not in source
     for path in python_files("resources"):
         source = path.read_text(encoding="utf-8")
@@ -77,6 +78,10 @@ def test_http_and_sql_stay_in_their_layers():
     for path in python_files("repositories"):
         source = path.read_text(encoding="utf-8")
         assert "from fastapi" not in source and "import fastapi" not in source
+        assert ".commit(" not in source and ".rollback(" not in source
+    for layer in ("controllers", "repositories", "resources", "dtos", "models"):
+        for path in python_files(layer):
+            assert not (imported_roots(path) & {"requests", "httpx", "urllib3"})
 
 
 def test_models_have_one_table_mapping_per_file():

@@ -30,13 +30,16 @@ def main():
     run = local / ("verification-" + uuid4().hex[:12])
     run.mkdir()
     data = run / "postgres"
-    db_port, api_port = free_port(), free_port()
-    while api_port == db_port:
-        api_port = free_port()
+    ports = set()
+    while len(ports) < 3:
+        ports.add(free_port())
+    db_port, api_port, registry_port = ports
     env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1", APP_ENV="test",
                INTERNAL_TOKEN="verification-only-token", SERVER_LOCALHOST="127.0.0.1",
                API_PORT=str(api_port), API_BASE_URL=f"http://127.0.0.1:{api_port}",
                ALLOW_TEST_DATABASE_RESET="1",
+               MOCKSERVER_URL=f"http://127.0.0.1:{registry_port}",
+               BET_REGISTRY_URL=f"http://127.0.0.1:{registry_port}/bets.csv",
                DATABASE_URL=f"postgresql+psycopg2://bootcamp@127.0.0.1:{db_port}/bootcamp_test")
     env["TEMP"] = env["TMP"] = str(run)
     env["PYTHONPYCACHEPREFIX"] = str(run / "bytecode")
@@ -52,6 +55,9 @@ def main():
         return result
 
     api = None
+    sys.path.insert(0, str(ROOT))
+    from tests.mock_registry_server import start_registry_server
+    registry_server = start_registry_server(registry_port)
     started = False
     print(f"Verification artifacts: {run}", flush=True)
     try:
@@ -86,6 +92,8 @@ def main():
             print((run / "pytest.log").read_text(encoding="utf-8"), flush=True)
             return result.returncode
     finally:
+        registry_server.shutdown()
+        registry_server.server_close()
         if api is not None and api.poll() is None:
             api.terminate()
             try:

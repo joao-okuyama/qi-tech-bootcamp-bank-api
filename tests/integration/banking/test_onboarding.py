@@ -136,7 +136,7 @@ def test_concurrent_account_opening_creates_exactly_one(university, engine):
 def test_blocked_customer_cannot_open_account(university, engine):
     key, payload = create_student(university)
     with engine.begin() as connection:
-        connection.execute(text("UPDATE cliente SET situacao = 'BLOQUEADO' WHERE chave = :key"), {"key": key})
+        connection.execute(text("UPDATE cliente SET status_id = (SELECT id FROM status_cliente WHERE codigo = 'BLOQUEADO') WHERE chave = :key"), {"key": key})
     assert send("POST", f"/customer/{key}/account", {})[0] == 409
 
 

@@ -1,7 +1,7 @@
 from sqlalchemy import tuple_
 
 from database import Context
-from models import Conta, MovimentacaoConta, Transferencia
+from models import Conta, EventoStatusConta, MovimentacaoConta, Transferencia
 
 
 class AccountRepository:
@@ -12,6 +12,9 @@ class AccountRepository:
         account = Conta(cliente_id=customer_id)
         self.session.add(account)
         self.session.flush()
+        self.session.add(EventoStatusConta(conta_id=account.id, status_id=account.status_id,
+                                          motivo="Abertura da conta"))
+        self.session.refresh(account, attribute_names=["status"])
         return account
 
     def get_by_customer_id(self, customer_id: int) -> Conta:

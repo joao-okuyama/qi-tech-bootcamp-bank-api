@@ -1,4 +1,6 @@
 from models.universidade import Universidade
+from models.status_cliente import StatusCliente
+from models.status_conta import StatusConta
 from models.cliente import Cliente
 from models.aluno import Aluno
 from models.organizacao_estudantil import OrganizacaoEstudantil
@@ -11,3 +13,7 @@ from models.vinculo_organizacao import VinculoOrganizacao
 from models.designacao_aprovador import DesignacaoAprovador
 from models.deposito import Deposito
 from models.evento_status_transferencia import EventoStatusTransferencia
+from models.evento_status_cliente import EventoStatusCliente
+from models.evento_status_conta import EventoStatusConta
+from models.empresas_bet import EmpresaBetAutorizada
+from models.sincronizacao_empresas_bet import SincronizacaoEmpresasBet

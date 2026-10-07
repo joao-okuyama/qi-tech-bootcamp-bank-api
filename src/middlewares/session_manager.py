@@ -24,4 +24,4 @@ def register_session_manager_middleware(application: FastAPI) -> None:
                 if context.db_session is not None:
                     context.db_session.close()
             finally:
-                clear_context()
+                clear_context(context)

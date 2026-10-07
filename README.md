@@ -1,235 +1,223 @@
-# Banco Universitário — API de Serviços Bancários
+# Banco Universitário
 
-API REST desenvolvida em **Python + FastAPI**, com banco de dados **PostgreSQL**, seguindo rigorosamente a **Arquitetura QI Tech** (Base Service).
+API para alunos e organizações estudantis. Implementa cadastro, uma conta por
+cliente, transferências internas PIX/TED, tarifas e extrato paginado. Alunos não
+precisam participar de uma organização para usar sua conta.
 
-O sistema provê infraestrutura de conta digital para estudantes universitários e organizações estudantis (centros acadêmicos, atléticas e diretórios), suportando abertura de contas, emissão de credenciais de acesso, depósitos simulados, transferências PIX e TED, cálculo de tarifas, aprovação em duas etapas para pessoas jurídicas e emissão de extratos paginados.
+PIX e TED são modalidades simuladas entre contas deste banco. Não há liquidação
+no SPI, conexão bancária real ou envio para contas de outras instituições.
 
----
+## Regras da entrega
 
-## 1. O Problema e Funcionalidades Suportadas
+- Valores em centavos inteiros: R$1,00 = 100.
+- PF: PIX e TED gratuitos. PJ: PIX gratuito; TED de 1%, arredondado ao centavo mais
+  próximo, com meio centavo para cima, limitado a 999 centavos.
+- Débito, crédito, tarifa, receita do banco e histórico pertencem à mesma transação.
+- Uma organização exige dois membros ou mais e exatamente dois aprovadores
+  designados. Uma transferência exige um aprovador diferente do solicitante,
+  não duas aprovações. Cargo institucional não concede autoridade automaticamente.
+- A aprovação permanece válida quando falta saldo, mas a execução revalida
+  membros, aprovador, contas e o cadastro BET.
+- Chave de idempotência única por conta de origem. Repetição com o mesmo conteúdo
+  retorna a operação existente; conteúdo diferente retorna 409.
+- Destinos PJ com CNPJ listado no cadastro BET são bloqueados. Destinos PF não
+  dependem desse cadastro.
 
-O Banco Universitário atende a dois perfis de clientes vinculados a instituições de ensino superior:
-- **Alunos (PF)**: Estudantes com CPF válido e data de nascimento que abrem e movimentam contas individuais.
-- **Organizações Estudantis (PJ)**: Entidades com CNPJ válido e vínculo com alunos (membros e aprovadores designados).
+## Arquitetura
 
-### Principais Funcionalidades:
-1. **Cadastro Institucional e de Clientes**:
-   - Criação de universidades (`POST /university`).
-   - Cadastro de alunos (`POST /student`) e organizações estudantis (`POST /student_organization`).
-   - Validação estrita de documentos (CPF e CNPJ com verificação dos dígitos verificadores e rejeição de caracteres de controle).
-2. **Conta Corrente Digital**:
-   - Uma conta por cliente (`POST /customer/{customer_key}/account`), com saldo inicial zero em BRL.
-   - Chave pública UUID (`account_key`) desacoplada do ID numérico interno do banco de dados.
-3. **Identidade e Autorização**:
-   - **Administrativa (`INTERNAL-TOKEN`)**: Provisionamento de entidades, abertura de contas, emissão de credenciais, configuração de acessos e liquidação de depósitos.
-   - **Estudante (`Authorization: Bearer <token>`)**: Acesso individual emitido para o aluno (`POST /customer/{customer_key}/credential`). O token é gerado com entropia criptográfica (`secrets.token_urlsafe`) e armazenado no banco exclusivamente como hash SHA-256.
-4. **Política Financeira e Tarifação**:
-   - Valores monetários manipulados e persistidos **exclusivamente em centavos** (`BIGINT`), eliminando erros de precisão de ponto flutuante.
-   - **PF**: PIX e TED gratuitos e ilimitados.
-   - **PJ**: PIX gratuito; TED com tarifa de 1% (arredondamento para cima, com teto de R$ 9,99 / 999 centavos).
-   - A tarifa é debitada da conta de origem e creditada atomicamente na conta interna do banco (`RECEITA_TARIFAS`).
-5. **Governança Organizacional (Dupla Aprovação)**:
-   - Configuração de membros e aprovadores (`PUT /customer/{customer_key}/banking_access`).
-   - Exigência de pelo menos 2 membros ativos e exatamente 2 aprovadores designados.
-   - Transferências de organizações nascem em `PENDENTE_APROVACAO` e exigem aprovação de um aprovador distinto do solicitante (**autoaprovação proibida**).
-6. **Extrato e Auditoria Imutável**:
-   - Consulta de extrato (`GET /account/{account_key}/statement`) com suporte a paginação por página/offset e por cursor.
-   - Gatilhos de banco de dados (`BEFORE UPDATE OR DELETE`) que asseguram a imutabilidade absoluta de movimentações, depósitos e eventos de status.
+`app.py → middlewares → schemas/resources → controllers → repositories → models/database`
 
----
+Os DTOs formatam a resposta. Controllers decidem regras e fazem commit;
+repositories consultam e persistem sem commit; connectors fazem HTTP externo.
+Os middlewares autenticam a credencial e cuidam do contexto e rollback. A
+autorização sobre cada conta é decidida no controller.
 
-## 2. Arquitetura do Projeto
+Clientes, contas e transferências guardam um `status_id` numérico. Tabelas de
+status fornecem os nomes exibidos no JSON. Clientes e contas registram seu estado
+inicial; transferências registram cada passo do fluxo implementado. Não existe
+rota de mudança de estado de cliente/conta nesta versão.
 
-O projeto segue a separação em camadas unidirecionais estabelecida no Bootcamp QI Tech:
+Detalhes e caminhos dos requisitos: [organização do projeto](docs/como-o-projeto-e-organizado.md).
+Apresentação mantida pelo time: [RFC](https://docs.google.com/document/d/1iaFBvGed3314zh6IZWiPhY4nEPlNnOsx/edit).
 
-$$\text{Middlewares} \longrightarrow \text{Schemas (JSON Schema)} \longrightarrow \text{Resources} \longrightarrow \text{Controllers} \longrightarrow \text{Repositories} \longrightarrow \text{Models (SQLAlchemy)}$$
+## Executar
 
-Na volta da requisição:
-$$\text{Models} \longrightarrow \text{DTOs (Data Transfer Objects)} \longrightarrow \text{JSON Response}$$
-
-```
-src/
-├── app.py                     # Montagem da aplicação e registro de rotas
-├── constants.py               # Variáveis de ambiente e constantes operacionais
-├── database.py                # Engine SQLAlchemy e contexto de sessão por requisição
-├── connectors/                # Comunicação com serviços externos (RestConnector)
-├── controllers/               # Regras de negócio, autorização e controle de transação (commit)
-├── dtos/                      # Mapeamento de objetos internos para dicionários de resposta
-├── errors/                    # Exceções de domínio e envelope padrão QI (title, desc, translation, code)
-├── middlewares/               # Request ID, Logging, Sessão e Autenticação (INTERNAL / Bearer)
-├── models/                    # Modelos declarativos SQLAlchemy (tabelas do banco)
-├── repositories/              # Consultas, bloqueios e persistência no banco (sem commit)
-├── resources/                 # Endpoints HTTP (status code, validação de schema e chamada ao controller)
-├── schemas/                   # Contratos de payload em JSON Schema (Draft 7)
-└── utils/                     # Utilitários (validação de CPF/CNPJ, logger, schema handler)
+```sh
+docker compose up --build
 ```
 
-Para uma explicação detalhada das responsabilidades e regras de cada pasta, consulte [docs/como-o-projeto-e-organizado.md](docs/como-o-projeto-e-organizado.md).
+API em http://localhost:3000. PostgreSQL persiste no volume `dados_banco`.
+`GET /health_check` responde 204 e verifica somente que a API está viva.
 
----
+Os valores padrão são exclusivamente de desenvolvimento, com portas vinculadas
+ao localhost. Não publique esta configuração na internet. O arquivo
+`.env.example` contém exemplos; não versione `.env` nem tokens reais.
 
-## 3. Como Rodar a Aplicação
+### Banco existente
 
-### Pré-requisitos
-- **Docker e Docker Compose**
-- **Git**
-- **Python 3.11 ou 3.12** (para execução local dos testes)
+A inicialização SQL só roda em um volume novo. Para atualizar um banco da revisão
+`3abaacb`, pare a API, valide um backup e execute uma única vez:
 
-### Inicialização Rápida via Docker Compose
-Para subir a API e o banco de dados PostgreSQL:
-
-```bash
-docker compose up
+```sh
+docker compose stop api
+docker compose cp database/migrations/001_status_e_bets.sql db:/tmp/001_status_e_bets.sql
+docker compose exec -T db psql -U bootcamp -d bootcamp -v ON_ERROR_STOP=1 -f /tmp/001_status_e_bets.sql
 ```
 
-A API estará disponível em:
-👉 **http://localhost:3000**
+Depois execute `docker compose up --build -d api`. A migração preserva clientes,
+email da organização, contas, saldos e histórico financeiro. Os eventos iniciais
+da migração representam o estado observado, não um histórico reconstruído.
+Não execute novamente `database.sql` sobre um banco existente nem apague seu
+volume para aplicar essa alteração. A migração não é aplicada automaticamente.
 
-Verificação de saúde (health check):
-```bash
-curl -i http://localhost:3000/health_check
-# HTTP/1.1 204 No Content
+## Atualizar o cadastro BET
+
+Fonte configurável por `BET_REGISTRY_URL`:
+[CSV oficial da SPA/MF](https://www.gov.br/fazenda/pt-br/composicao/orgaos/secretaria-de-premios-e-apostas/transparencia-ativa-processos-de-autorizacao-de-apostas-de-quota-fixa/planilha-de-autorizacoes-1.csv).
+
+`POST /bet_registry/sync`, com `INTERNAL-TOKEN` e corpo `{}`, baixa e valida
+o CSV antes de substituir a tabela em uma transação. O arquivo não é gravado em
+disco e não é baixado durante uma transferência. Não enviamos nosso token ao gov.br.
+
+Para chamar pelo script, configure `INTERNAL_TOKEN` e `API_BASE_URL` no ambiente:
+
+```sh
+python scripts/sync_bet_registry.py
 ```
 
----
+Esse comando pode ser chamado diariamente por um agendador externo. Não há
+agendamento instalado automaticamente. Faça a primeira sincronização antes de
+testar transferências para PJ.
 
-## 4. Variáveis de Ambiente
+Configuração:
+- `BET_REGISTRY_TIMEOUT`: 20 segundos para o download.
+- `BET_REGISTRY_MAX_BYTES`: 2 MiB.
+- `BET_REGISTRY_MAX_AGE_HOURS`: 48 horas. É uma política operacional desta entrega,
+  não uma exigência legal. Recomenda-se atualizar diariamente.
 
-As variáveis possuem valores padrão preenchidos para execução via Docker no `docker-compose.yml`. Para personalizar o ambiente local:
+Download inválido, vazio ou falha de persistência preservam os registros e a data
+do último sucesso. Uma lista ainda válida continua funcionando durante uma falha
+de atualização. Sem lista válida, destinos PJ recebem 503, sem débito; PF continua
+funcionando.
 
-```bash
-cp .env.example .env
-```
+Uma atualização que remove CNPJs retorna 409 e o hash do novo conteúdo. Revise
+o arquivo na fonte e somente depois envie `{"reviewed_sha256": "<hash revisado>"}`
+ou use `--reviewed-sha256` no script. A confirmação vale somente para aquele
+conteúdo. Não confirme o hash automaticamente num agendador.
 
-| Variável | Descrição | Padrão Local |
-|---|---|---|
-| `APP_ENV` | Ambiente de execução (`local`, `test`, `production`) | `local` |
-| `SERVICE_NAME` | Identificador do microsserviço | `banco-universitario-api` |
-| `DATABASE_URL` | String de conexão SQLAlchemy PostgreSQL | `postgresql+psycopg2://bootcamp:bootcamp@localhost:5432/bootcamp` |
-| `INTERNAL_TOKEN` | Token compartilhado para rotas administrativas | `default_token` |
-| `API_BASE_URL` | URL base utilizada pela suíte de testes de aceitação | `http://127.0.0.1:3000` |
+O bloqueio consulta o CNPJ cadastrado do destinatário na criação e antes da
+execução. A lista identifica empresas autorizadas presentes no arquivo; não
+detecta todo operador ilegal, intermediário ou empresa ainda não listada.
+Não é uma declaração de bloqueio legal universal.
 
----
+## Autenticação e jornadas
 
-## 5. Como Rodar os Testes
+`INTERNAL-TOKEN` é administrativo: cadastro, abertura de conta, credenciais,
+depósitos simulados, configuração de membros e sincronização. Uma organização
+é cadastrada por esse administrador e recebe vínculos em
+`PUT /customer/{customer_key}/banking_access`; não há inferência automática do
+aluno criador, pois a credencial administrativa não identifica um aluno.
 
-Os testes são executados contra o banco e a API com isolamento transacional:
+O aluno recebe um token opaco em
+`POST /customer/{customer_key}/credential`. O banco guarda somente seu hash.
+Use `Authorization: Bearer <token>` para movimentar sua própria conta ou uma
+organização onde tenha vínculo. Reemitir uma credencial invalida a anterior.
+UUIDs identificam contas e operações; não substituem autenticação.
 
-```bash
-# Criar ambiente virtual
-python -m venv .venv
-source .venv/bin/activate  # No Windows: .venv\Scripts\activate
+Principais rotas:
 
-# Instalar dependências de desenvolvimento
-pip install -r requirements-dev.txt
+| Método / rota | Finalidade |
+|---|---|
+| POST /university | Cadastrar universidade |
+| GET /university/{university_key} | Consultar universidade |
+| POST /student | Cadastrar PF |
+| POST /student_organization | Cadastrar PJ com email de contato |
+| GET /customer/{customer_key} | Consultar cliente autorizado |
+| POST /customer/{customer_key}/account | Abrir conta |
+| POST /customer/{customer_key}/credential | Emitir/rotacionar token do aluno |
+| PUT /customer/{customer_key}/banking_access | Configurar membros e dois aprovadores |
+| GET /account/{account_key} | Consultar conta |
+| GET /account/{account_key}/balance | Consultar saldo |
+| GET /account/{account_key}/statement | Consultar extrato |
+| POST /account/{account_key}/deposit | Registrar depósito simulado |
+| POST /transfer | Solicitar transferência |
+| GET /transfer/{transfer_key} | Consultar operação como participante autorizado |
+| POST /transfer/{transfer_key}/approve | Aprovar e tentar executar |
+| POST /transfer/{transfer_key}/reject | Recusar |
+| POST /transfer/{transfer_key}/execute | Retomar uma operação aprovada |
+| POST /bet_registry/sync | Atualizar cadastro BET |
 
-# Executar testes unitários (incluindo testes de arquitetura AST)
-pytest tests/unit
+Exemplo de transferência, usando chaves recebidas no cadastro:
 
-# Executar suíte completa de regressão
-pytest tests
-```
-
----
-
-## 6. Principais Endpoints e Contratos
-
-Todos os corpos de resposta de erro seguem o envelope padrão QI Tech:
 ```json
 {
-  "title": "Registration conflict",
-  "description": "A registration already exists for this CPF.",
-  "translation": "Já existe um cadastro para o identificador informado.",
-  "code": "QIT002002"
-}
-```
-
-### 1. Criar Universidade (Administrativo)
-```bash
-curl -X POST http://localhost:3000/university \
-  -H "INTERNAL-TOKEN: default_token" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "Universidade de São Paulo"}'
-```
-*Resposta `201 Created`*: `{"university_key": "..."}`
-
-### 2. Cadastrar Estudante (Administrativo)
-```bash
-curl -X POST http://localhost:3000/student \
-  -H "INTERNAL-TOKEN: default_token" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "university_key": "<UUID_UNIVERSIDADE>",
-    "full_name": "Mariana Souza",
-    "email": "mariana.souza@usp.br",
-    "cpf": "52998224725",
-    "birthdate": "2001-08-14"
-  }'
-```
-*Resposta `201 Created`*: Retorna `CustomerDTO` com `customer_key`.
-
-### 3. Abrir Conta (Administrativo)
-```bash
-curl -X POST http://localhost:3000/customer/<CUSTOMER_KEY>/account \
-  -H "INTERNAL-TOKEN: default_token" \
-  -H "Content-Type: application/json" \
-  -d '{}'
-```
-*Resposta `201 Created`*: `{"account_key": "...", "currency": "BRL", "status": "ATIVA", "created_at": "..."}`
-
-### 4. Emitir Credencial de Aluno (Administrativo)
-```bash
-curl -X POST http://localhost:3000/customer/<CUSTOMER_KEY>/credential \
-  -H "INTERNAL-TOKEN: default_token" \
-  -H "Content-Type: application/json" \
-  -d '{}'
-```
-*Resposta `201 Created`*: `{"access_token": "...", "token_type": "Bearer"}`
-
-### 5. Depósito Simulado (Administrativo)
-```bash
-curl -X POST http://localhost:3000/account/<ACCOUNT_KEY>/deposit \
-  -H "INTERNAL-TOKEN: default_token" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "amount_cents": 50000,
-    "reference": "DEP-2026-09-001"
-  }'
-```
-*Resposta `201 Created`* (ou `200 OK` na repetição idempotente).
-
-### 6. Transferência PIX/TED (Autenticação Bearer do Estudante)
-```bash
-curl -X POST http://localhost:3000/transfer \
-  -H "Authorization: Bearer <ACCESS_TOKEN>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "source_account_key": "<CONTA_ORIGEM>",
-    "destination_account_key": "<CONTA_DESTINO>",
+    "source_account_key": "<UUID da origem>",
+    "destination_account_key": "<UUID do destino>",
     "amount_cents": 15000,
     "type": "PIX",
     "description": "Ajuda de custo",
-    "idempotency_key": "TX-998811"
-  }'
-```
-*Resposta `201 Created`* com status `CONCLUIDA` (PF) ou `PENDENTE_APROVACAO` (PJ).
-
-### 7. Consultar Saldo e Extrato (Autenticação Bearer ou Administrativa)
-```bash
-# Saldo
-curl http://localhost:3000/account/<ACCOUNT_KEY>/balance \
-  -H "Authorization: Bearer <ACCESS_TOKEN>"
-
-# Extrato Paginado
-curl "http://localhost:3000/account/<ACCOUNT_KEY>/statement?limit=10&page=0" \
-  -H "Authorization: Bearer <ACCESS_TOKEN>"
+    "idempotency_key": "operacao-001"
+}
 ```
 
----
+Descrição é opcional. PF pode concluir no POST; PJ retorna
+`PENDENTE_APROVACAO`. Após aprovação sem saldo suficiente, `APROVADA` significa
+aprovada, mas ainda não executada. Somente `CONCLUIDA` indica movimentação do saldo.
 
-## 7. Decisões Técnicas e Financeiras
+Extrato: `?limit=20&page=0` ou `?limit=20&cursor=<next_cursor>`.
+Não combine page e cursor. O offset máximo é 10.000; use cursor para avançar
+além disso. O cursor mantém a ordenação mesmo quando chegam novas movimentações.
 
-- **Estratégia de Chave Dupla**: O identificador sequencial `id` é estritamente interno e utilizado em índices e foreign keys relacionais. Todas as rotas públicas, referências em JSON e URLs operam exclusivamente com chaves UUIDv4 (`..._key`).
-- **Prevenção de Deadlocks**: Em transferências financeiras simultâneas entre duas contas (ex: $A \to B$ e $B \to A$), o repositório bloqueia as linhas via `SELECT ... FOR UPDATE` ordenando os registros sempre pelo `id` numérico crescente (`order_by(Conta.id)`).
-- **Idempotência**: `idempotency_key` única por conta de origem. Retentativas idênticas de rede retornam o recurso existente (`200 OK`) sem duplicar débitos.
-- **Tratamento de Sessão e ACID**: O middleware `session_manager.py` gerencia o ciclo de vida da sessão via `contextvars`. O commit da transação é responsabilidade exclusiva do controller após validação integral das regras.
+Erros seguem `title, description, translation, code`: 400 para schema inválido,
+403 para falta de permissão ou destino BET, 404 para entidade ausente, 409 para
+conflito/saldo insuficiente, 422 para dados de domínio inválidos e 503 para
+cadastro BET indisponível. Falhas inesperadas retornam 500 sem dados internos.
+
+## Testar a entrega
+
+Aceitação HTTP, PostgreSQL novo e CSV servido pelo MockServer:
+
+```sh
+docker compose -p banco-acceptance -f docker-compose.test.yml up --build --abort-on-container-exit --exit-code-from tests
+```
+
+Regressão completa, incluindo integridade SQL e migração:
+
+```sh
+docker compose -p banco-regression -f docker-compose.test.yml -f docker-compose.regression.yml up --build --abort-on-container-exit --exit-code-from tests
+```
+
+Encerre somente os projetos isolados de teste:
+
+```sh
+docker compose -p banco-acceptance -f docker-compose.test.yml down --volumes
+docker compose -p banco-regression -f docker-compose.test.yml -f docker-compose.regression.yml down --volumes
+```
+
+Fora do Docker, com a API e o banco de teste configurados:
+- `pytest`: aceitação HTTP, como definido em pytest.ini.
+- `pytest tests/unit`: testes locais.
+- `pytest tests`: regressão completa, exige banco dedicado terminado em
+  `_test`, `APP_ENV=test` e `ALLOW_TEST_DATABASE_RESET=1`.
+- `MOCKSERVER_URL`: endereço do MockServer controlado pelos testes;
+  `BET_REGISTRY_URL` da API deve apontar para `/bets.csv` nesse mesmo servidor.
+
+`scripts/verify_local.py --postgres-bin <pasta dos binários>` cria um PostgreSQL
+descartável, inicia a API e usa um servidor HTTP local de CSV. Essa verificação
+não substitui a execução Linux nem valida a imagem real do MockServer.
+
+Os cenários verificam autorização, aprovação independente, saldo insuficiente,
+idempotência, concorrência, reconciliação, rollback parcial, paginação e cadastro
+BET. Os gatilhos recusam UPDATE/DELETE dos históricos; um administrador com
+privilégios de DDL ainda pode alterar os gatilhos.
+
+Antes da entrega, execute os dois projetos Compose no commit final, registre
+`git rev-parse HEAD`, confirme a árvore limpa e guarde logs/CI associados ao SHA.
+A publicação do repositório e a revisão da apresentação ficam a cargo do time.
+
+## Limites
+
+Não inclui investimentos, rendimento CDI/CDB, fundo de formatura, devoluções,
+liquidação externa ou autenticação de um provedor real. Uso financeiro em produção
+exigiria, entre outros controles, ciclo de vida de credenciais, permissões
+restritas no banco, limites de recursos e processos de reconciliação operacional.

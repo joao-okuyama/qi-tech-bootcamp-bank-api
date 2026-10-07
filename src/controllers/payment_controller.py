@@ -1,13 +1,16 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from controllers.access_policy import AccessPolicy
 from controllers.base_controller import BaseController
 from controllers.payment_policy import MAX_CENTS, calculate_fee, validate_amount
+from constants import BET_REGISTRY_MAX_AGE_HOURS
 from dtos.payment_dto import PaymentDTO
 from errors.banking_errors import BankingEntityNotFound
 from errors.payment_errors import BankingAccessDenied, InsufficientFunds, InvalidPayment, PaymentConflict
+from errors.bet_errors import BetRegistryUnavailable, BettingTransferBlocked
 from repositories.access_repository import AccessRepository
 from repositories.payment_repository import PaymentRepository
+from repositories.bet_repository import BetRepository
 from utils.banking_validation import clean_registration_text, parse_key
 
 
@@ -17,6 +20,7 @@ class PaymentController(BaseController):
         self.repository = PaymentRepository(self.context)
         self.access_repository = AccessRepository(self.context)
         self.access = AccessPolicy(self.context, self.access_repository)
+        self.bet_repository = BetRepository(self.context)
 
     def create(self, payload):
         actor = self.access.actor()
@@ -39,6 +43,7 @@ class PaymentController(BaseController):
             self.session.commit()
             return result, False
         customer = customers[source.cliente_id]
+        self._require_allowed_destination(destination, now)
         is_organization = customer.tipo == "ORGANIZACAO_ESTUDANTIL"
         if is_organization:
             self._approvers(source.cliente_id, now)
@@ -125,7 +130,7 @@ class PaymentController(BaseController):
             self.session.commit()
             return result, False
         customer = self.repository.lock_customers([account.cliente_id])[0]
-        if account.situacao != "ATIVA" or customer.situacao != "ATIVO":
+        if account.status.codigo != "ATIVA" or customer.status.codigo != "ATIVO":
             raise InvalidPayment("The destination account and customer must be active.")
         self._check_credit(account, amount)
         now = datetime.now(timezone.utc)
@@ -146,7 +151,7 @@ class PaymentController(BaseController):
             raise BankingEntityNotFound("account")
         source, destination = (accounts[key] for key in keys)
         customers = {row.id: row for row in self.repository.lock_customers([source.cliente_id, destination.cliente_id])}
-        if any(row.situacao != "ATIVA" for row in accounts.values()) or any(row.situacao != "ATIVO" for row in customers.values()):
+        if any(row.status.codigo != "ATIVA" for row in accounts.values()) or any(row.status.codigo != "ATIVO" for row in customers.values()):
             raise InvalidPayment("Both accounts and customers must be active.")
         return source, destination, customers
 
@@ -157,7 +162,7 @@ class PaymentController(BaseController):
 
     def _require_source(self, source, actor_id, now):
         actor = self.repository.customer(actor_id)
-        if actor is None or actor.situacao != "ATIVO":
+        if actor is None or actor.status.codigo != "ATIVO":
             raise BankingAccessDenied()
         if source.cliente_id == actor_id:
             return
@@ -179,6 +184,7 @@ class PaymentController(BaseController):
             raise BankingAccessDenied()
 
     def _execute(self, transfer, source, destination, actor_id, now, preserve_approval):
+        self._require_allowed_destination(destination, now)
         total = transfer.valor_centavos + transfer.tarifa_centavos
         if source.saldo_centavos < total:
             if preserve_approval:
@@ -188,7 +194,7 @@ class PaymentController(BaseController):
         revenue = None
         if transfer.tarifa_centavos:
             revenue = self.repository.revenue_account()
-            if revenue.situacao != "ATIVA":
+            if revenue.status.codigo != "ATIVA":
                 raise PaymentConflict("The fee revenue account is unavailable.")
             self._check_credit(revenue, transfer.tarifa_centavos)
         self.repository.set_status(transfer, "PROCESSANDO", actor_id, now)
@@ -207,6 +213,23 @@ class PaymentController(BaseController):
     def _check_credit(account, amount):
         if account.saldo_centavos + amount > MAX_CENTS:
             raise InvalidPayment("The resulting balance exceeds the supported limit.")
+
+    def _require_allowed_destination(self, destination, now):
+        customer = self.repository.customer(destination.cliente_id)
+        if customer.tipo != "ORGANIZACAO_ESTUDANTIL":
+            return
+        snapshot = self.bet_repository.snapshot()
+        # Uma sincronizacao pode ter terminado enquanto aguardavamos este bloqueio.
+        now = datetime.now(timezone.utc)
+        if (snapshot is None or snapshot.atualizado_em is None or snapshot.atualizado_em > now
+                or now - snapshot.atualizado_em >= timedelta(hours=BET_REGISTRY_MAX_AGE_HOURS)
+                or snapshot.quantidade <= 0 or self.bet_repository.count() != snapshot.quantidade):
+            raise BetRegistryUnavailable()
+        cnpj = self.bet_repository.recipient_cnpj(customer.id)
+        if cnpj is None:
+            raise BetRegistryUnavailable()
+        if self.bet_repository.by_cnpj(cnpj) is not None:
+            raise BettingTransferBlocked()
 
     def _transfer(self, key, lock=False):
         transfer = self.repository.transfer(parse_key(key), lock=lock)

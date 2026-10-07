@@ -33,7 +33,7 @@ class Banking:
         }))["customer_key"]
         account = self.body(self.api("POST", f"/customer/{customer}/account", json={}))["account_key"]
         self.configure(customer, members, members[:2])
-        return {"customer": customer, "account": account}
+        return {"customer": customer, "account": account, "cnpj": base}
 
     def configure(self, organization, members, approvers):
         return self.body(self.api("PUT", f"/customer/{organization}/banking_access", json={

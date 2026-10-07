@@ -4,6 +4,7 @@ from secrets import token_urlsafe
 
 from controllers.access_policy import AccessPolicy
 from controllers.base_controller import BaseController
+from dtos.access_dto import AccessDTO
 from errors.banking_errors import BankingEntityNotFound
 from errors.payment_errors import BankingAccessDenied, InvalidPayment
 from repositories.access_repository import AccessRepository
@@ -21,19 +22,19 @@ class AccessController(BaseController):
         customer = self.repository.customer(parse_key(customer_key), lock=True)
         if customer is None:
             raise BankingEntityNotFound("customer")
-        if customer.tipo != "ALUNO" or customer.situacao != "ATIVO" or self.repository.student(customer.chave) is None:
+        if customer.tipo != "ALUNO" or customer.status.codigo != "ATIVO" or self.repository.student(customer.chave) is None:
             raise BankingAccessDenied()
         token = token_urlsafe(32)
         self.repository.set_credential(customer.id, sha256(token.encode()).hexdigest(), datetime.now(timezone.utc))
         self.session.commit()
-        return {"access_token": token, "token_type": "Bearer"}
+        return AccessDTO.credential(token)
 
     def configure(self, customer_key, payload):
         self.access.require_internal()
         organization = self.repository.customer(parse_key(customer_key), lock=True)
         if organization is None:
             raise BankingEntityNotFound("customer")
-        if organization.tipo != "ORGANIZACAO_ESTUDANTIL" or organization.situacao != "ATIVO":
+        if organization.tipo != "ORGANIZACAO_ESTUDANTIL" or organization.status.codigo != "ATIVO":
             raise InvalidPayment("An active organization is required.")
         members = []
         ids_by_key = {}
@@ -50,6 +51,6 @@ class AccessController(BaseController):
             raise InvalidPayment("Exactly two distinct members must be designated as approvers.")
         self.repository.replace_access(organization.id, members,
                                        [ids_by_key[key] for key in approver_keys], datetime.now(timezone.utc))
-        result = {"customer_key": str(organization.chave), "members": len(members), "approvers": 2}
+        result = AccessDTO.configuration(organization, len(members), len(approver_keys))
         self.session.commit()
         return result

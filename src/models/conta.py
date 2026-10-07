@@ -1,4 +1,5 @@
-from sqlalchemy import BigInteger, CHAR, Column, DateTime, ForeignKey, String, func
+from sqlalchemy import BigInteger, CHAR, Column, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
 
 from models.base import Base
@@ -13,5 +14,6 @@ class Conta(Base):
     finalidade = Column(String(20), nullable=False, server_default="CLIENTE")
     saldo_centavos = Column(BigInteger, nullable=False, server_default="0")
     moeda = Column(CHAR(3), nullable=False, server_default="BRL")
-    situacao = Column(String(20), nullable=False, server_default="ATIVA")
+    status_id = Column(Integer, ForeignKey("status_conta.id"), nullable=False, server_default="1")
+    status = relationship("StatusConta", lazy="selectin")
     criado_em = Column(DateTime(timezone=True), nullable=False, server_default=func.now())

@@ -35,6 +35,10 @@ services:
       # A senha que protege os endpoints internos. O padrao vale pra
       # estudar; num sistema de verdade, isso nunca teria valor padrao.
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:-default_token}
+      BET_REGISTRY_URL: ${BET_REGISTRY_URL:-https://www.gov.br/fazenda/pt-br/composicao/orgaos/secretaria-de-premios-e-apostas/transparencia-ativa-processos-de-autorizacao-de-apostas-de-quota-fixa/planilha-de-autorizacoes-1.csv}
+      BET_REGISTRY_MAX_AGE_HOURS: ${BET_REGISTRY_MAX_AGE_HOURS:-48}
+      BET_REGISTRY_TIMEOUT: ${BET_REGISTRY_TIMEOUT:-20}
+      BET_REGISTRY_MAX_BYTES: ${BET_REGISTRY_MAX_BYTES:-2097152}
     volumes:
       # Monta o codigo pra dentro do container: salvou o arquivo,
       # a API recarrega sozinha (o --reload ali embaixo).

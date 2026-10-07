@@ -93,7 +93,7 @@ def test_blocked_account_cannot_send_or_receive(banking, engine):
     a, b = banking.student(), banking.student()
     banking.body(banking.deposit(a["account"], 100))
     with engine.begin() as connection:
-        connection.execute(text("UPDATE conta SET situacao = 'BLOQUEADA' WHERE chave = :key"), {"key": b["account"]})
+        connection.execute(text("UPDATE conta SET status_id = (SELECT id FROM status_conta WHERE codigo = 'BLOQUEADA') WHERE chave = :key"), {"key": b["account"]})
     assert banking.transfer(a, banking.payload(a["account"], b["account"])).status_code == 422
     assert banking.deposit(b["account"], 100).status_code == 422
     assert banking.balance(a["account"]) == 100

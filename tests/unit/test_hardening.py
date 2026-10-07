@@ -97,7 +97,7 @@ def test_unknown_integrity_error_keeps_original_exception(kind, session):
         controller = AccountController()
         controller.repository = MagicMock()
         controller.customer_repository = MagicMock()
-        controller.customer_repository.get_by_key.return_value = SimpleNamespace(id=1, situacao="ATIVO")
+        controller.customer_repository.get_by_key.return_value = SimpleNamespace(id=1, status=SimpleNamespace(codigo="ATIVO"))
         controller.repository.get_by_customer_id.return_value = None
         controller.repository.create.side_effect = error
         with pytest.raises(IntegrityError) as caught:

@@ -1,4 +1,9 @@
 services:
+  mockserver:
+    image: mockserver/mockserver:5.15.0
+    environment:
+      MOCKSERVER_LOG_LEVEL: WARN
+
   db:
     build: ./database
     environment:
@@ -21,6 +26,7 @@ services:
       APP_ENV: test
       DATABASE_URL: postgresql+psycopg2://bootcamp:bootcamp@db:5432/bootcamp_test
       INTERNAL_TOKEN: test-only-token
+      BET_REGISTRY_URL: http://mockserver:1080/bets.csv
     depends_on:
       db:
         condition: service_healthy
@@ -38,6 +44,9 @@ services:
       APP_ENV: test
       INTERNAL_TOKEN: test-only-token
       API_BASE_URL: http://api:3000
+      MOCKSERVER_URL: http://mockserver:1080
     depends_on:
       api:
         condition: service_healthy
+      mockserver:
+        condition: service_started

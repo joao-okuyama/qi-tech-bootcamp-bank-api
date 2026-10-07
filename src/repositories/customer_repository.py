@@ -1,5 +1,5 @@
 from database import Context
-from models import Aluno, Cliente, OrganizacaoEstudantil
+from models import Aluno, Cliente, EventoStatusCliente, OrganizacaoEstudantil
 
 
 class CustomerRepository:
@@ -19,6 +19,9 @@ class CustomerRepository:
             data_nascimento=birthdate,
         ))
         self.session.flush()
+        self.session.add(EventoStatusCliente(cliente_id=customer.id, status_id=customer.status_id,
+                                            motivo="Cadastro do cliente"))
+        self.session.refresh(customer, attribute_names=["status"])
         return customer
 
     def create_organization(self, data: dict, university_id: int) -> Cliente:
@@ -34,6 +37,9 @@ class CustomerRepository:
             cnpj=data["cnpj"],
         ))
         self.session.flush()
+        self.session.add(EventoStatusCliente(cliente_id=customer.id, status_id=customer.status_id,
+                                            motivo="Cadastro do cliente"))
+        self.session.refresh(customer, attribute_names=["status"])
         return customer
 
     def get_by_key(self, key, for_update: bool = False) -> Cliente:
