@@ -38,7 +38,6 @@ inicial; transferências registram cada passo do fluxo implementado. Não existe
 rota de mudança de estado de cliente/conta nesta versão.
 
 Detalhes e caminhos dos requisitos: [organização do projeto](docs/como-o-projeto-e-organizado.md).
-Apresentação mantida pelo time: [RFC](https://docs.google.com/document/d/1iaFBvGed3314zh6IZWiPhY4nEPlNnOsx/edit).
 
 ## Executar
 
