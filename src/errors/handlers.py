@@ -1,3 +1,6 @@
+from pathlib import Path
+from traceback import walk_tb
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -15,6 +18,15 @@ from utils.logger import get_logger
 
 
 logger = get_logger(__name__)
+
+
+def unexpected_error_response(request: Request, exception: Exception) -> JSONResponse:
+    # Exceções do driver podem incluir os dados da linha que falhou.
+    frames = [(Path(frame.f_code.co_filename).name, line, frame.f_code.co_name)
+              for frame, line in walk_tb(exception.__traceback__)]
+    logger.error("Erro inesperado em %s %r (%s), locais=%s", request.method,
+                 request.url.path, type(exception).__name__, frames)
+    return qi_exception_to_response(InternalError())
 
 
 def qi_exception_to_response(exception: QIException) -> JSONResponse:
@@ -61,7 +73,7 @@ def register_error_handlers(application: FastAPI) -> None:
         if exception.status_code == 405:
             return qi_exception_to_response(MethodNotAllowed())
 
-        logger.error(f"HTTP {exception.status_code} em {request.url.path}: {exception.detail}")
+        logger.error("HTTP %s em %r", exception.status_code, request.url.path)
         return qi_exception_to_response(InternalError())
 
     @application.exception_handler(RequestValidationError)
@@ -97,5 +109,4 @@ def register_error_handlers(application: FastAPI) -> None:
 
     @application.exception_handler(Exception)
     def handle_unexpected_error(request: Request, exception: Exception) -> JSONResponse:
-        logger.exception(f"Erro inesperado em {request.method} {request.url.path}")
-        return qi_exception_to_response(InternalError())
+        return unexpected_error_response(request, exception)

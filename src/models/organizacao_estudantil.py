@@ -10,5 +10,6 @@ class OrganizacaoEstudantil(Base):
     universidade_id = Column(BigInteger, ForeignKey("universidade.id"), nullable=False)
     razao_social = Column(String(255), nullable=False)
     nome_fantasia = Column(String(255), nullable=False)
+    email = Column(String(255), nullable=False)
     cnpj = Column(CHAR(14), nullable=False)
     criado_em = Column(DateTime(timezone=True), nullable=False, server_default=func.now())

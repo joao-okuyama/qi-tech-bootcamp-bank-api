@@ -1,4 +1,15 @@
 # Imagem oficial e publica do Python. Qualquer pessoa consegue baixar.
+FROM python:3.11-slim AS acceptance
+WORKDIR /project
+COPY requirements-acceptance.txt .
+RUN pip install --no-cache-dir -r requirements-acceptance.txt && useradd --system runner
+COPY pytest.ini .
+COPY tests/conftest.py tests/conftest.py
+COPY tests/__init__.py tests/__init__.py
+COPY tests/acceptance tests/acceptance
+USER runner
+CMD ["python", "-m", "pytest", "-p", "no:cacheprovider", "-q"]
+
 FROM python:3.11-slim AS base
 
 # Roda a aplicacao com um usuario sem privilegios, nunca como root.
@@ -31,4 +42,4 @@ USER user
 
 # --no-server-header: o uvicorn nao anuncia a propria versao, que e
 # informacao de menos pra quem procura uma versao com falha conhecida.
-CMD uvicorn app:app --host 0.0.0.0 --port 3000 --no-server-header
+CMD uvicorn app:app --host 0.0.0.0 --port 3000 --no-server-header --no-access-log

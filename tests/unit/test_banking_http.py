@@ -76,10 +76,10 @@ def test_not_found_error_contract(client, headers, monkeypatch):
 
 def test_statement_resource_maps_pagination(client, headers, monkeypatch):
     controller = MagicMock()
-    controller.get_statement.return_value = {"data": [], "is_last_page": True}
+    controller.statement.return_value = {"data": [], "is_last_page": True, "limit": 2, "page": 3}
     monkeypatch.setattr("resources.account.AccountController", lambda: controller)
     key = str(uuid4())
     response = client.get(f"/account/{key}/statement?limit=2&page=3", headers=headers)
     assert response.status_code == 200
     assert response.json() == {"data": [], "limit": 2, "page": 3, "is_last_page": True}
-    controller.get_statement.assert_called_once_with(key, 2, 6)
+    controller.statement.assert_called_once_with(key, 2, 3, None)

@@ -1,5 +1,5 @@
 from database import Context
-from models import Aluno, Cliente, OrganizacaoEstudantil
+from models import Aluno, Cliente, EventoStatusCliente, OrganizacaoEstudantil
 
 
 class CustomerRepository:
@@ -13,12 +13,15 @@ class CustomerRepository:
         self.session.add(Aluno(
             cliente_id=customer.id,
             universidade_id=university_id,
-            nome_completo=data["full_name"].strip(),
-            email=data["email"].strip().lower(),
+            nome_completo=data["full_name"],
+            email=data["email"],
             cpf=data["cpf"],
             data_nascimento=birthdate,
         ))
         self.session.flush()
+        self.session.add(EventoStatusCliente(cliente_id=customer.id, status_id=customer.status_id,
+                                            motivo="Cadastro do cliente"))
+        self.session.refresh(customer, attribute_names=["status"])
         return customer
 
     def create_organization(self, data: dict, university_id: int) -> Cliente:
@@ -28,11 +31,15 @@ class CustomerRepository:
         self.session.add(OrganizacaoEstudantil(
             cliente_id=customer.id,
             universidade_id=university_id,
-            razao_social=data["legal_name"].strip(),
-            nome_fantasia=data["trade_name"].strip(),
+            razao_social=data["legal_name"],
+            nome_fantasia=data["trade_name"],
+            email=data["email"],
             cnpj=data["cnpj"],
         ))
         self.session.flush()
+        self.session.add(EventoStatusCliente(cliente_id=customer.id, status_id=customer.status_id,
+                                            motivo="Cadastro do cliente"))
+        self.session.refresh(customer, attribute_names=["status"])
         return customer
 
     def get_by_key(self, key, for_update: bool = False) -> Cliente:

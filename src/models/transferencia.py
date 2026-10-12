@@ -12,6 +12,7 @@ class Transferencia(Base):
     conta_origem_id = Column(BigInteger, ForeignKey("conta.id"), nullable=False)
     conta_destino_id = Column(BigInteger, ForeignKey("conta.id"), nullable=False)
     aluno_solicitante_cliente_id = Column(BigInteger, ForeignKey("aluno.cliente_id"), nullable=False)
+    aluno_aprovador_cliente_id = Column(BigInteger, ForeignKey("aluno.cliente_id"))
     valor_centavos = Column(BigInteger, nullable=False)
     tarifa_centavos = Column(BigInteger, nullable=False, server_default="0")
     tipo = Column(String(10), nullable=False)

@@ -6,8 +6,8 @@ CHECK_DIGIT_POSITIONS = [9, 10]
 def is_valid_cpf(document_number: str) -> bool:
     """Diz se um CPF existe de verdade — não se ele tem a cara certa.
 
-    O schema em src/schemas/post_sample_entity.json já cobrou o formato:
-    três pontos, um hífen, onze dígitos. Isto aqui é outra pergunta, e a
+    O schema em src/schemas/post_student.json já cobrou o formato:
+    onze dígitos numéricos. Isto aqui é outra pergunta, e a
     diferença entre as duas é a lição deste arquivo.
 
     Os dois últimos dígitos de um CPF não são escolhidos: eles são o

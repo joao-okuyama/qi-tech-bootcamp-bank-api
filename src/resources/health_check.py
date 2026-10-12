@@ -10,7 +10,7 @@ class HealthCheckResource:
     """As duas rotas que respondem sem token: quem é este serviço, e se ele está vivo."""
 
     def on_get_home(self) -> JSONResponse:
-        home = {"service": SERVICE_NAME, "id": str(os.getpid())}
+        home = {"service": SERVICE_NAME, "version": "1.0.0"}
 
         return JSONResponse(content=home, status_code=status.HTTP_200_OK)
 

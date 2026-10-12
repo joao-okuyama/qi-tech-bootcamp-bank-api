@@ -1,1 +1,1 @@
-from controllers.sample_entity_controller import SampleEntityController
+# Controllers package

@@ -7,6 +7,6 @@ class CustomerDTO:
         return {
             "customer_key": str(customer.chave),
             "type": customer.tipo,
-            "status": customer.situacao,
+            "status": customer.status.codigo,
             "created_at": customer.criado_em.isoformat(),
         }

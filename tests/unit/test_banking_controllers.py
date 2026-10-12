@@ -33,8 +33,8 @@ def customer_controller():
     controller.repository = MagicMock()
     controller.university_repository = MagicMock()
     controller.university_repository.get_by_key.return_value = entity(nome="Universidade")
-    controller.repository.create_student.return_value = entity(tipo="ALUNO", situacao="ATIVO")
-    controller.repository.create_organization.return_value = entity(tipo="ORGANIZACAO_ESTUDANTIL", situacao="ATIVO")
+    controller.repository.create_student.return_value = entity(tipo="ALUNO", status=SimpleNamespace(codigo="ATIVO"))
+    controller.repository.create_organization.return_value = entity(tipo="ORGANIZACAO_ESTUDANTIL", status=SimpleNamespace(codigo="ATIVO"))
     return controller
 
 
@@ -56,9 +56,12 @@ def test_creates_organization(customer_controller, session):
     result = customer_controller.create_organization({
         "university_key": str(uuid4()), "cnpj": "12ABC34501DE35",
         "legal_name": "Organização Teste", "trade_name": "Org",
+        "email": "CONTATO@EXAMPLE.TEST",
     })
     assert result["type"] == "ORGANIZACAO_ESTUDANTIL"
     session.commit.assert_called_once()
+    payload = customer_controller.repository.create_organization.call_args.args[0]
+    assert payload["email"] == "contato@example.test"
 
 
 def test_missing_university_does_not_create_customer(customer_controller, student_payload, session):
@@ -97,10 +100,10 @@ def account_controller():
     controller = AccountController()
     controller.repository = MagicMock()
     controller.customer_repository = MagicMock()
-    controller.customer_repository.get_by_key.return_value = entity(tipo="ALUNO", situacao="ATIVO")
+    controller.customer_repository.get_by_key.return_value = entity(tipo="ALUNO", status=SimpleNamespace(codigo="ATIVO"))
     controller.repository.get_by_customer_id.return_value = None
     controller.repository.create.return_value = entity(
-        moeda="BRL", situacao="ATIVA", saldo_centavos=0,
+        moeda="BRL", status=SimpleNamespace(codigo="ATIVA"), saldo_centavos=0,
     )
     return controller
 
@@ -116,7 +119,7 @@ def test_opening_account_locks_customer_before_creating(account_controller, sess
 
 @pytest.mark.parametrize("status", ["BLOQUEADO", "ENCERRADO"])
 def test_inactive_customer_cannot_open_account(account_controller, status, session):
-    account_controller.customer_repository.get_by_key.return_value.situacao = status
+    account_controller.customer_repository.get_by_key.return_value.status.codigo = status
     with pytest.raises(CustomerCannotOpenAccount):
         account_controller.create(str(uuid4()))
     account_controller.repository.create.assert_not_called()
@@ -152,7 +155,9 @@ def test_account_unique_conflict_is_also_handled(account_controller, session):
 
 
 def test_balance_is_integer_cents(account_controller, session):
-    account_controller.repository.get_by_key.return_value = entity(saldo_centavos=101, moeda="BRL")
+    account_controller.repository.get_by_key.return_value = entity(
+        cliente_id=1, saldo_centavos=101, moeda="BRL"
+    )
     assert account_controller.get_balance(str(uuid4()))["balance_cents"] == 101
     session.commit.assert_not_called()
 
@@ -167,19 +172,20 @@ def test_statement_keeps_amount_positive_and_explains_direction(kind, direction)
 
 
 def test_statement_uses_extra_row_for_pagination(account_controller, session):
-    account_controller.repository.get_by_key.return_value = entity()
+    account_controller.repository.get_by_key.return_value = entity(cliente_id=1)
     rows = [(entity(tipo="CREDITO", valor_centavos=100), uuid4(), "Teste") for _ in range(3)]
     account_controller.repository.list_movements.return_value = rows
-    result = account_controller.get_statement(str(uuid4()), 2, 4)
+    result = account_controller.statement(str(uuid4()), 2, page=2)
     assert len(result["data"]) == 2 and result["is_last_page"] is False
     account_controller.repository.list_movements.assert_called_once_with(1, 2, 4)
     session.commit.assert_not_called()
 
 
 def test_empty_statement(account_controller):
-    account_controller.repository.get_by_key.return_value = entity()
+    account_controller.repository.get_by_key.return_value = entity(cliente_id=1)
     account_controller.repository.list_movements.return_value = []
-    assert account_controller.get_statement(str(uuid4()), 20, 0) == {"data": [], "is_last_page": True}
+    assert account_controller.statement(str(uuid4()), 20) == {
+        "data": [], "is_last_page": True, "limit": 20, "page": 0}
 
 
 def test_duplicate_university(session):

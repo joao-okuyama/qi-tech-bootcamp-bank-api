@@ -83,7 +83,8 @@ def make_cnpj():
 def test_organization_registration_and_account(university, engine):
     payload = {
         "university_key": university, "legal_name": "Organização de Teste",
-        "trade_name": "Org Teste", "cnpj": make_cnpj(),
+        "trade_name": "Org Teste", "email": f"{uuid4()}@example.test",
+        "cnpj": make_cnpj(),
     }
     status, result = send("POST", "/student_organization", payload)
     assert status == 201, result
@@ -93,8 +94,8 @@ def test_organization_registration_and_account(university, engine):
     assert send("POST", "/student_organization", payload)[0] == 409
     with engine.connect() as connection:
         assert connection.execute(text(
-            "SELECT count(*) FROM organizacao_estudantil WHERE cnpj = :cnpj"
-        ), {"cnpj": payload["cnpj"]}).scalar_one() == 1
+            "SELECT email FROM organizacao_estudantil WHERE cnpj = :cnpj"
+        ), {"cnpj": payload["cnpj"]}).scalar_one() == payload["email"]
 
 
 def test_duplicate_cpf_rolls_back_parent_row(university, engine):
@@ -135,7 +136,7 @@ def test_concurrent_account_opening_creates_exactly_one(university, engine):
 def test_blocked_customer_cannot_open_account(university, engine):
     key, payload = create_student(university)
     with engine.begin() as connection:
-        connection.execute(text("UPDATE cliente SET situacao = 'BLOQUEADO' WHERE chave = :key"), {"key": key})
+        connection.execute(text("UPDATE cliente SET status_id = (SELECT id FROM status_cliente WHERE codigo = 'BLOQUEADO') WHERE chave = :key"), {"key": key})
     assert send("POST", f"/customer/{key}/account", {})[0] == 409
 
 
@@ -176,3 +177,45 @@ def test_statement_orders_ties_and_exposes_integer_amounts(university, engine):
     assert status == 200 and second["is_last_page"] is True
     assert [row["amount_cents"] for row in second["data"]] == [100]
     assert all(row["transfer_key"] is None for row in first["data"])
+
+
+def test_database_failure_rolls_back_and_next_registration_works(university, engine):
+    payload = student_payload(university)
+    with engine.begin() as connection:
+        before = connection.execute(text("SELECT count(*) FROM cliente")).scalar_one()
+        connection.execute(text("""
+            CREATE FUNCTION rejeitar_cadastro_teste() RETURNS trigger LANGUAGE plpgsql AS $$
+            BEGIN RAISE EXCEPTION 'falha provocada para testar rollback'; END;
+            $$
+        """))
+        connection.execute(text("""
+            CREATE TRIGGER falha_cadastro_teste BEFORE INSERT ON aluno
+            FOR EACH ROW EXECUTE FUNCTION rejeitar_cadastro_teste()
+        """))
+    try:
+        status, result = send("POST", "/student", payload)
+        assert status == 500 and result["code"] == "QIT000500"
+        assert "falha provocada" not in str(result)
+        with engine.connect() as connection:
+            assert connection.execute(text("SELECT count(*) FROM cliente")).scalar_one() == before
+    finally:
+        with engine.begin() as connection:
+            connection.execute(text("DROP TRIGGER falha_cadastro_teste ON aluno"))
+            connection.execute(text("DROP FUNCTION rejeitar_cadastro_teste()"))
+    assert send("POST", "/student", payload)[0] == 201
+
+
+def test_statement_never_includes_another_account_movements(university, engine):
+    first, _ = create_student(university)
+    second, _ = create_student(university)
+    _, account_a = send("POST", f"/customer/{first}/account", {})
+    _, account_b = send("POST", f"/customer/{second}/account", {})
+    with engine.begin() as connection:
+        account_id = connection.execute(text("SELECT id FROM conta WHERE chave = :key"),
+                                        {"key": account_b["account_key"]}).scalar_one()
+        connection.execute(text("INSERT INTO movimentacao_conta (conta_id, tipo, valor_centavos) "
+                                "VALUES (:id, 'APORTE_INICIAL', 123)"), {"id": account_id})
+        connection.execute(text("UPDATE conta SET saldo_centavos = 123 WHERE id = :id"), {"id": account_id})
+    status, statement = send("GET", f"/account/{account_a['account_key']}/statement")
+    assert status == 200 and statement["data"] == []
+    assert send("GET", f"/account/{account_b['account_key']}/statement")[1]["data"][0]["amount_cents"] == 123

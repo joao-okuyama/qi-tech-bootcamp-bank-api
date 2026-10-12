@@ -1,10 +1,23 @@
 import re
+import unicodedata
 from datetime import date
 from uuid import UUID
 
 from errors import InvalidParameter
 from errors.banking_errors import InvalidBankingRegistration
 from utils.document_number import is_valid_cpf
+
+
+def clean_registration_text(value: str, field: str) -> str:
+    for character in value:
+        if unicodedata.category(character) in ("Cc", "Cs") or character in "\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069":
+            raise InvalidBankingRegistration(f"The {field} contains unsupported control characters.")
+    value = unicodedata.normalize("NFC", value).strip()
+    if not value:
+        raise InvalidBankingRegistration(f"The {field} must not be blank.")
+    if len(value) > 255:
+        raise InvalidBankingRegistration(f"The normalized {field} must not exceed 255 characters.")
+    return value
 
 
 def parse_key(value: str) -> UUID:

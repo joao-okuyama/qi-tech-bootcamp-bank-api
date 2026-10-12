@@ -1,41 +1,3 @@
-CREATE TABLE sample_entity_status(
-    id		                        SERIAL PRIMARY KEY,
-    enumerator                      VARCHAR(50) NOT NULL,
-    created_at                      TIMESTAMP NOT NULL DEFAULT(NOW()),
-    UNIQUE(enumerator)
-);
-
-INSERT INTO sample_entity_status (enumerator) VALUES
-('created'),
-('pending'),
-('success'),
-('failed');
-
-CREATE TABLE sample_entity(
-    id                              SERIAL PRIMARY KEY,
-    sample_entity_key               CHAR(36) NOT NULL,
-    status_id                       INTEGER NOT NULL REFERENCES sample_entity_status(id),
-    sample_entity_data              JSONB NOT NULL,
-    name                            VARCHAR(255) NOT NULL,
-    email                           VARCHAR(255) NOT NULL,
-    document_number                 CHAR(14) NOT NULL,
-    birthdate                       DATE NOT NULL,
-    counter                         INTEGER NOT NULL,
-    created_at                      TIMESTAMP NOT NULL DEFAULT(NOW()),
-    UNIQUE(sample_entity_key),
-    UNIQUE(document_number),
-    UNIQUE(email)
-);
-
-CREATE TABLE sample_entity_status_event(
-    id                              SERIAL PRIMARY KEY,
-    sample_entity_id                INTEGER NOT NULL REFERENCES sample_entity(id),
-    status_id                       INTEGER NOT NULL REFERENCES sample_entity_status(id),
-    event_datetime                  TIMESTAMP NOT NULL,
-    created_at                      TIMESTAMP NOT NULL DEFAULT(NOW())
-);
-
--- As tabelas de exemplo acima foram mantidas para não quebrar o projeto base.
 -- No modelo bancário, todos os valores monetários são armazenados em centavos.
 
 CREATE TABLE universidade(
@@ -47,31 +9,48 @@ CREATE TABLE universidade(
     CONSTRAINT unico_universidade_nome UNIQUE (nome)
 );
 
+CREATE TABLE status_cliente(
+    id SERIAL PRIMARY KEY,
+    codigo VARCHAR(20) NOT NULL UNIQUE
+);
+
+INSERT INTO status_cliente (id, codigo) VALUES
+(1, 'ATIVO'), (2, 'BLOQUEADO'), (3, 'ENCERRADO');
+SELECT setval(pg_get_serial_sequence('status_cliente', 'id'), 3);
+
+CREATE TABLE status_conta(
+    id SERIAL PRIMARY KEY,
+    codigo VARCHAR(20) NOT NULL UNIQUE
+);
+
+INSERT INTO status_conta (id, codigo) VALUES
+(1, 'ATIVA'), (2, 'BLOQUEADA'), (3, 'ENCERRADA');
+SELECT setval(pg_get_serial_sequence('status_conta', 'id'), 3);
+
 CREATE TABLE cliente(
     id                              BIGSERIAL PRIMARY KEY,
     chave                           UUID NOT NULL DEFAULT gen_random_uuid(),
     tipo                            VARCHAR(30) NOT NULL,
-    situacao                        VARCHAR(20) NOT NULL DEFAULT 'ATIVO',
+    status_id                       INTEGER NOT NULL DEFAULT 1 REFERENCES status_cliente(id) ON DELETE RESTRICT,
     criado_em                       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT unico_cliente_chave UNIQUE (chave),
+    CONSTRAINT unico_cliente_id_tipo UNIQUE (id, tipo),
     CONSTRAINT verifica_cliente_tipo CHECK (
         tipo IN ('ALUNO', 'ORGANIZACAO_ESTUDANTIL')
-    ),
-    CONSTRAINT verifica_cliente_situacao CHECK (
-        situacao IN ('ATIVO', 'BLOQUEADO', 'ENCERRADO')
     )
 );
 
 CREATE TABLE aluno(
     cliente_id                      BIGINT PRIMARY KEY,
+    tipo                            VARCHAR(30) GENERATED ALWAYS AS ('ALUNO'::VARCHAR) STORED,
     universidade_id                 BIGINT NOT NULL,
     nome_completo                   VARCHAR(255) NOT NULL,
     email                           VARCHAR(255) NOT NULL,
     cpf                             CHAR(11) NOT NULL,
     data_nascimento                 DATE NOT NULL,
     criado_em                       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT fk_aluno_cliente FOREIGN KEY (cliente_id)
-        REFERENCES cliente(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_aluno_cliente FOREIGN KEY (cliente_id, tipo)
+        REFERENCES cliente(id, tipo) ON DELETE RESTRICT,
     CONSTRAINT fk_aluno_universidade FOREIGN KEY (universidade_id)
         REFERENCES universidade(id) ON DELETE RESTRICT,
     CONSTRAINT unico_aluno_email UNIQUE (email),
@@ -81,14 +60,15 @@ CREATE TABLE aluno(
 
 CREATE TABLE organizacao_estudantil(
     cliente_id                      BIGINT PRIMARY KEY,
+    tipo                            VARCHAR(30) GENERATED ALWAYS AS ('ORGANIZACAO_ESTUDANTIL'::VARCHAR) STORED,
     universidade_id                 BIGINT NOT NULL,
     razao_social                    VARCHAR(255) NOT NULL,
     nome_fantasia                   VARCHAR(255) NOT NULL,
     email                           VARCHAR(255) NOT NULL,
     cnpj                            CHAR(14) NOT NULL,
     criado_em                       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT fk_organizacao_cliente FOREIGN KEY (cliente_id)
-        REFERENCES cliente(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_organizacao_cliente FOREIGN KEY (cliente_id, tipo)
+        REFERENCES cliente(id, tipo) ON DELETE RESTRICT,
     CONSTRAINT fk_organizacao_universidade FOREIGN KEY (universidade_id)
         REFERENCES universidade(id) ON DELETE RESTRICT,
     CONSTRAINT unico_organizacao_cnpj UNIQUE (cnpj),
@@ -110,7 +90,7 @@ CREATE TABLE vinculo_organizacao(
         REFERENCES aluno(cliente_id) ON DELETE RESTRICT,
     CONSTRAINT unico_vinculo_chave UNIQUE (chave),
     CONSTRAINT verifica_vinculo_papel CHECK (
-        papel IN ('MEMBRO', 'TESOUREIRO', 'PRESIDENTE')
+        papel IN ('MEMBRO', 'TESOUREIRO', 'PRESIDENTE', 'VICE_PRESIDENTE')
     ),
     CONSTRAINT verifica_vinculo_vigencia CHECK (
         fim_vigencia IS NULL OR fim_vigencia >= inicio_vigencia
@@ -125,21 +105,47 @@ CREATE UNIQUE INDEX unico_vinculo_organizacao_ativo
 CREATE TABLE conta(
     id                              BIGSERIAL PRIMARY KEY,
     chave                           UUID NOT NULL DEFAULT gen_random_uuid(),
-    cliente_id                      BIGINT NOT NULL,
+    cliente_id                      BIGINT NULL,
+    finalidade                      VARCHAR(20) NOT NULL DEFAULT 'CLIENTE',
     saldo_centavos                  BIGINT NOT NULL DEFAULT 0,
     moeda                           CHAR(3) NOT NULL DEFAULT 'BRL',
-    situacao                        VARCHAR(20) NOT NULL DEFAULT 'ATIVA',
+    status_id                       INTEGER NOT NULL DEFAULT 1 REFERENCES status_conta(id) ON DELETE RESTRICT,
     criado_em                       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT fk_conta_cliente FOREIGN KEY (cliente_id)
         REFERENCES cliente(id) ON DELETE RESTRICT,
     CONSTRAINT unico_conta_chave UNIQUE (chave),
     CONSTRAINT unico_conta_cliente UNIQUE (cliente_id),
+    CONSTRAINT verifica_conta_finalidade CHECK (
+        (finalidade = 'CLIENTE' AND cliente_id IS NOT NULL)
+        OR (finalidade = 'RECEITA_TARIFAS' AND cliente_id IS NULL)
+    ),
     CONSTRAINT verifica_conta_saldo CHECK (saldo_centavos >= 0),
-    CONSTRAINT verifica_conta_moeda CHECK (moeda = 'BRL'),
-    CONSTRAINT verifica_conta_situacao CHECK (
-        situacao IN ('ATIVA', 'BLOQUEADA', 'ENCERRADA')
-    )
+    CONSTRAINT verifica_conta_moeda CHECK (moeda = 'BRL')
 );
+
+CREATE TABLE evento_status_cliente(
+    id BIGSERIAL PRIMARY KEY,
+    cliente_id BIGINT NOT NULL REFERENCES cliente(id) ON DELETE RESTRICT,
+    status_anterior_id INTEGER NULL REFERENCES status_cliente(id) ON DELETE RESTRICT,
+    status_id INTEGER NOT NULL REFERENCES status_cliente(id) ON DELETE RESTRICT,
+    aluno_responsavel_cliente_id BIGINT NULL REFERENCES aluno(cliente_id) ON DELETE RESTRICT,
+    motivo VARCHAR(255) NOT NULL,
+    ocorrido_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX indice_evento_cliente ON evento_status_cliente (cliente_id, ocorrido_em, id);
+
+CREATE TABLE evento_status_conta(
+    id BIGSERIAL PRIMARY KEY,
+    conta_id BIGINT NOT NULL REFERENCES conta(id) ON DELETE RESTRICT,
+    status_anterior_id INTEGER NULL REFERENCES status_conta(id) ON DELETE RESTRICT,
+    status_id INTEGER NOT NULL REFERENCES status_conta(id) ON DELETE RESTRICT,
+    aluno_responsavel_cliente_id BIGINT NULL REFERENCES aluno(cliente_id) ON DELETE RESTRICT,
+    motivo VARCHAR(255) NOT NULL,
+    ocorrido_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX indice_evento_conta ON evento_status_conta (conta_id, ocorrido_em, id);
 
 CREATE TABLE status_transferencia(
     id                              SERIAL PRIMARY KEY,
@@ -147,6 +153,36 @@ CREATE TABLE status_transferencia(
     criado_em                       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT unico_status_transferencia_codigo UNIQUE (codigo)
 );
+
+CREATE UNIQUE INDEX unico_conta_receita ON conta (finalidade)
+    WHERE finalidade = 'RECEITA_TARIFAS';
+
+-- Conta interna sem CPF/CNPJ fictício; não pode ser destino de transferências.
+INSERT INTO conta (finalidade) VALUES ('RECEITA_TARIFAS');
+
+INSERT INTO evento_status_conta (conta_id, status_id, motivo)
+SELECT id, status_id, 'Criacao da conta interna de tarifas' FROM conta WHERE finalidade = 'RECEITA_TARIFAS';
+
+CREATE TABLE credencial_aluno(
+    aluno_cliente_id BIGINT PRIMARY KEY REFERENCES aluno(cliente_id) ON DELETE RESTRICT,
+    resumo_token CHAR(64) NOT NULL UNIQUE,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE designacao_aprovador(
+    id BIGSERIAL PRIMARY KEY,
+    organizacao_cliente_id BIGINT NOT NULL REFERENCES organizacao_estudantil(cliente_id) ON DELETE RESTRICT,
+    aluno_cliente_id BIGINT NOT NULL REFERENCES aluno(cliente_id) ON DELETE RESTRICT,
+    inicio_vigencia TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    fim_vigencia TIMESTAMPTZ NULL,
+    CONSTRAINT verifica_designacao_vigencia CHECK (
+        fim_vigencia IS NULL OR fim_vigencia >= inicio_vigencia
+    )
+);
+
+CREATE UNIQUE INDEX unico_designacao_ativa
+    ON designacao_aprovador (organizacao_cliente_id, aluno_cliente_id)
+    WHERE fim_vigencia IS NULL;
 
 INSERT INTO status_transferencia (codigo) VALUES
 ('CRIADA'),
@@ -165,6 +201,7 @@ CREATE TABLE transferencia(
     conta_origem_id                 BIGINT NOT NULL,
     conta_destino_id                BIGINT NOT NULL,
     aluno_solicitante_cliente_id    BIGINT NOT NULL,
+    aluno_aprovador_cliente_id      BIGINT NULL REFERENCES aluno(cliente_id) ON DELETE RESTRICT,
     valor_centavos                  BIGINT NOT NULL,
     tarifa_centavos                 BIGINT NOT NULL DEFAULT 0,
     tipo                            VARCHAR(10) NOT NULL,
@@ -190,6 +227,10 @@ CREATE TABLE transferencia(
     ),
     CONSTRAINT verifica_transferencia_valor CHECK (valor_centavos > 0),
     CONSTRAINT verifica_transferencia_tarifa CHECK (tarifa_centavos >= 0),
+    CONSTRAINT verifica_transferencia_autoaprovacao CHECK (
+        aluno_aprovador_cliente_id IS NULL
+        OR aluno_aprovador_cliente_id <> aluno_solicitante_cliente_id
+    ),
     CONSTRAINT verifica_transferencia_tipo CHECK (
         tipo IN ('PIX', 'TED')
     ),
@@ -198,12 +239,22 @@ CREATE TABLE transferencia(
     )
 );
 
+CREATE TABLE deposito(
+    id BIGSERIAL PRIMARY KEY,
+    chave UUID NOT NULL UNIQUE DEFAULT gen_random_uuid(),
+    conta_id BIGINT NOT NULL REFERENCES conta(id) ON DELETE RESTRICT,
+    referencia VARCHAR(255) NOT NULL UNIQUE,
+    valor_centavos BIGINT NOT NULL CHECK (valor_centavos > 0),
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- O saldo e suas movimentações devem ser gravados na mesma transação do banco.
 CREATE TABLE movimentacao_conta(
     id                              BIGSERIAL PRIMARY KEY,
     chave                           UUID NOT NULL DEFAULT gen_random_uuid(),
     conta_id                        BIGINT NOT NULL,
     transferencia_id               BIGINT NULL,
+    deposito_id                    BIGINT NULL UNIQUE REFERENCES deposito(id) ON DELETE RESTRICT,
     tipo                            VARCHAR(20) NOT NULL,
     valor_centavos                  BIGINT NOT NULL,
     criado_em                       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -215,13 +266,16 @@ CREATE TABLE movimentacao_conta(
     CONSTRAINT unico_movimentacao_transferencia_tipo
         UNIQUE (transferencia_id, conta_id, tipo),
     CONSTRAINT verifica_movimentacao_tipo CHECK (
-        tipo IN ('APORTE_INICIAL', 'DEBITO', 'CREDITO', 'TARIFA')
+        tipo IN ('APORTE_INICIAL', 'DEPOSITO', 'DEBITO', 'CREDITO', 'TARIFA', 'RECEITA_TARIFA')
     ),
     CONSTRAINT verifica_movimentacao_valor CHECK (valor_centavos > 0),
     CONSTRAINT verifica_movimentacao_origem CHECK (
-        (tipo = 'APORTE_INICIAL' AND transferencia_id IS NULL)
+        (tipo = 'APORTE_INICIAL' AND transferencia_id IS NULL AND deposito_id IS NULL)
         OR
-        (tipo <> 'APORTE_INICIAL' AND transferencia_id IS NOT NULL)
+        (tipo = 'DEPOSITO' AND transferencia_id IS NULL AND deposito_id IS NOT NULL)
+        OR
+        (tipo IN ('DEBITO', 'CREDITO', 'TARIFA', 'RECEITA_TARIFA')
+            AND transferencia_id IS NOT NULL AND deposito_id IS NULL)
     )
 );
 
@@ -243,5 +297,45 @@ CREATE TABLE evento_status_transferencia(
         REFERENCES aluno(cliente_id) ON DELETE RESTRICT
 );
 
+CREATE TABLE empresas_bet_autorizadas(
+    id                              SERIAL PRIMARY KEY,
+    cnpj                            CHAR(14) NOT NULL,
+    razao_social                    VARCHAR(255) NOT NULL,
+
+    CONSTRAINT unico_bet_cnpj UNIQUE (cnpj),
+    CONSTRAINT verifica_bet_cnpj CHECK (cnpj ~ '^[A-Z0-9]{12}[0-9]{2}$')
+);
+
+-- A linha unica coordena a leitura das transferencias com a substituicao da lista.
+CREATE TABLE sincronizacao_empresas_bet(
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    atualizado_em TIMESTAMPTZ NULL,
+    resumo_conteudo CHAR(64) NULL,
+    quantidade INTEGER NOT NULL DEFAULT 0 CHECK (quantidade >= 0),
+    CONSTRAINT verifica_sincronizacao_bet CHECK (
+        (atualizado_em IS NULL AND resumo_conteudo IS NULL AND quantidade = 0)
+        OR (atualizado_em IS NOT NULL AND resumo_conteudo IS NOT NULL AND quantidade > 0)
+    )
+);
+
+INSERT INTO sincronizacao_empresas_bet (id) VALUES (1);
+
 CREATE INDEX indice_evento_status_transferencia
     ON evento_status_transferencia (transferencia_id, ocorrido_em, id);
+
+CREATE FUNCTION impedir_alteracao_historico() RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+    RAISE EXCEPTION 'Histórico financeiro permite somente inclusão';
+END;
+$$;
+
+CREATE TRIGGER preservar_movimentacao BEFORE UPDATE OR DELETE ON movimentacao_conta
+    FOR EACH ROW EXECUTE FUNCTION impedir_alteracao_historico();
+CREATE TRIGGER preservar_evento BEFORE UPDATE OR DELETE ON evento_status_transferencia
+    FOR EACH ROW EXECUTE FUNCTION impedir_alteracao_historico();
+CREATE TRIGGER preservar_deposito BEFORE UPDATE OR DELETE ON deposito
+    FOR EACH ROW EXECUTE FUNCTION impedir_alteracao_historico();
+CREATE TRIGGER preservar_evento_cliente BEFORE UPDATE OR DELETE ON evento_status_cliente
+    FOR EACH ROW EXECUTE FUNCTION impedir_alteracao_historico();
+CREATE TRIGGER preservar_evento_conta BEFORE UPDATE OR DELETE ON evento_status_conta
+    FOR EACH ROW EXECUTE FUNCTION impedir_alteracao_historico();

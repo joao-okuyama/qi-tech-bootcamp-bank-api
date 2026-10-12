@@ -1,4 +1,5 @@
 from errors.base_error import *
-from errors.custom_errors import *
 from errors.banking_errors import *
+from errors.payment_errors import *
+from errors.bet_errors import *
 from errors.handlers import register_error_handlers, qi_exception_to_response
