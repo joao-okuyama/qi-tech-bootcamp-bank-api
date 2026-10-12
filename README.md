@@ -7,6 +7,8 @@ precisam participar de uma organização para usar sua conta.
 PIX e TED são modalidades simuladas entre contas deste banco. Não há liquidação
 no SPI, conexão bancária real ou envio para contas de outras instituições.
 
+(Arquivos .png dos fluxos e ERD foram salvos nesse repositório. Para consulta, acessar "ERD.drawio.png" e " Fluxos (todos).drawio.png)
+
 ## Regras da entrega
 
 - Valores em centavos inteiros: R$1,00 = 100.
